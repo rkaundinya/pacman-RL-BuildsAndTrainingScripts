@@ -1,6 +1,7 @@
 import numpy as np
 import math
 from layers import Layer
+import mathHelperLibrary as mhl
 
 class ConvolutionalLayer(Layer):
     #Input: kernelDimension, determines size of kernel K 
@@ -30,8 +31,9 @@ class ConvolutionalLayer(Layer):
 
         #Go through each observation 1-N
         for obsIdx, observation in enumerate(dataIn):
-            result[obsIdx] = self.crossCorrelate(observation, self.kernel[obsIdx], numRowsToIterate, numColsToIterate)
+            result[obsIdx] = mhl.crossCorrelate(observation, self.kernel[obsIdx], numRowsToIterate, numColsToIterate)
 
+        print(result)
         self.setPrevOut(result)
 
     def updateWeights(self, gradIn, eta=0.0001):
@@ -47,7 +49,8 @@ class ConvolutionalLayer(Layer):
                 gradMatrix = gradIn[kernelIdx]
                 numRowsToIterate = matrix.shape[0] - gradMatrix.shape[0] + 1
                 numColsToIterate = matrix.shape[1] - gradMatrix.shape[1] + 1
-                kernelMatrix -= eta * self.crossCorrelate(matrix, gradMatrix, numRowsToIterate, numColsToIterate)
+                debugTest = mhl.crossCorrelate(matrix, gradMatrix, numRowsToIterate, numColsToIterate)
+                kernelMatrix -= eta * mhl.crossCorrelate(matrix, gradMatrix, numRowsToIterate, numColsToIterate)
 
     #Output: result, returns a tensor with each kernel matrix transposed
     def gradient(self):
@@ -86,35 +89,7 @@ class ConvolutionalLayer(Layer):
             
             #Cross-correlate by kernel (K) transposed to get backcoming gradient
             kernel = kernelsTransposed[matrixIdx]
-            result[matrixIdx] = self.crossCorrelate(zPaddedGradIn, kernel, numRowsToIterate, numColsToIterate)
-
-        return result
-    
-    #Input: kernel, assumes square kernel - kernel/filter we are cross-correlating with
-    #Output: cross-correlated matrix
-    #Note: Assumes kernel is smaller dimension than matrix1 - always make sure matrix1 has higher 
-    #dimennsionality than kernel
-    def crossCorrelate(self, matrix1, kernel, numRowsToIterate, numColsToIterate):
-        finalRowIdx = matrix1.shape[0]
-        finalColIdx = matrix1.shape[1]
-
-        result = np.zeros((numColsToIterate, numColsToIterate))
-        kernelDim = kernel.shape[0]
-        
-        #Go through each row of feature map
-        for featureMapRowIdx, maxRow in enumerate(range(kernelDim - 1, finalRowIdx)):
-            #Go through each column of feature map
-            for featureMapColIdx, maxCol in enumerate(range(kernelDim - 1, finalColIdx)):
-                #Cache sum aggregator for compiler optimization
-                currentFeatureMapSum = 0
-
-                #Go through each row and column of input according to current featuremap index
-                for kernelRowIdx, inputRowIdx in enumerate(range(featureMapRowIdx, maxRow + 1)):
-                    for kernelColIdx, inputColIdx in enumerate(range(featureMapColIdx, maxCol + 1)):
-                        currentFeatureMapSum += matrix1[inputRowIdx,inputColIdx] * kernel[kernelRowIdx,kernelColIdx]
-
-                #Assign obs feature map index result to aggregated sum  
-                result[featureMapRowIdx,featureMapColIdx] = currentFeatureMapSum
+            result[matrixIdx] = mhl.crossCorrelate(zPaddedGradIn, kernel, numRowsToIterate, numColsToIterate)
 
         return result
     
@@ -132,15 +107,10 @@ row8 = np.array([[1,0,1,0,0,1,0,1]])
 test = np.array([np.concatenate((row1, row2, row3, row4, row5, row6, row7, row8), axis=0)])
 
 dJdF = np.zeros((1,6,6))
+
 dJdF[0][0][1] = -2
 dJdF[0][3][4] = -2
 dJdF[0][4][1] = 6
-
-print(dJdF)
-print(test)
-
-for matrix in test:
-    print(matrix.shape[0])
 
 convLayer = ConvolutionalLayer(3)
 convLayer.forward(test)
@@ -148,17 +118,22 @@ convLayer.updateWeights(dJdF)
 
 test = np.array([[[1,2,3],[2,2,3],[1,3,3]]])
 kernelTest1 = np.ones((1,2,2))
+
 convLayerTest1 = ConvolutionalLayer(2)
 convLayerTest1.setKernel(kernelTest1)
 convLayerTest1.forward(test)
+
 kernel = np.array([[[2,2,1],[-1,-1,0],[2,0,2]]])
+
 for kernelIdx, kernelMatrix in enumerate(kernel):
     kernel[kernelIdx] = np.transpose(kernelMatrix)
+
 gradIn = np.zeros((1,6,6))
 gradIn[0][0][1] = -2
 gradIn[0][2][2] = 1
 gradIn[0][3][4] = -2
 gradIn[0][4][1] = 6
+
 convLayer = ConvolutionalLayer(3)
 convLayer.setKernel(kernel)
 print(convLayer.backward(gradIn))'''
