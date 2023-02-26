@@ -26,11 +26,28 @@ class ConvolutionalLayer(Layer):
         numRowsToIterate = h - self.kernelDim + 1
         numColsToIterate = w - self.kernelDim + 1
 
-        result = np.zeros((n, self.kernelDim, self.kernelDim))
+        result = np.zeros((n, numRowsToIterate, numColsToIterate))
 
         #Go through each observation 1-N
         for obsIdx, observation in enumerate(dataIn):
             result[obsIdx] = self.crossCorrelate(observation, self.kernel[obsIdx], numRowsToIterate, numColsToIterate)
+
+        self.setPrevOut(result)
+
+    def updateWeights(self, gradIn, eta=0.0001):
+        prevIn = self.getPrevIn()
+
+        #Declare variables outside of loop so we don't have to reallocate memory
+        #for vars each loop cycle (compiler optimization)
+        numRowsToIterate = 0
+        numColsToIterate = 0
+
+        for matrix in prevIn:
+            for kernelIdx, kernelMatrix in enumerate(self.kernel):
+                gradMatrix = gradIn[kernelIdx]
+                numRowsToIterate = matrix.shape[0] - gradMatrix.shape[0] + 1
+                numColsToIterate = matrix.shape[1] - gradMatrix.shape[1] + 1
+                kernelMatrix -= eta * self.crossCorrelate(matrix, gradMatrix, numRowsToIterate, numColsToIterate)
 
     #Output: result, returns a tensor with each kernel matrix transposed
     def gradient(self):
@@ -75,17 +92,19 @@ class ConvolutionalLayer(Layer):
     
     #Input: kernel, assumes square kernel - kernel/filter we are cross-correlating with
     #Output: cross-correlated matrix
+    #Note: Assumes kernel is smaller dimension than matrix1 - always make sure matrix1 has higher 
+    #dimennsionality than kernel
     def crossCorrelate(self, matrix1, kernel, numRowsToIterate, numColsToIterate):
-        resultXDim = matrix1.shape[0] - kernel.shape[0] + 1
-        resultyDim = matrix1.shape[1] - kernel.shape[1] + 1
+        finalRowIdx = matrix1.shape[0]
+        finalColIdx = matrix1.shape[1]
 
-        result = np.zeros((resultXDim, resultyDim))
+        result = np.zeros((numColsToIterate, numColsToIterate))
         kernelDim = kernel.shape[0]
         
         #Go through each row of feature map
-        for featureMapRowIdx, maxRow in enumerate(range(kernelDim - 1, numRowsToIterate + 1)):
+        for featureMapRowIdx, maxRow in enumerate(range(kernelDim - 1, finalRowIdx)):
             #Go through each column of feature map
-            for featureMapColIdx, maxCol in enumerate(range(kernelDim - 1, numColsToIterate + 1)):
+            for featureMapColIdx, maxCol in enumerate(range(kernelDim - 1, finalColIdx)):
                 #Cache sum aggregator for compiler optimization
                 currentFeatureMapSum = 0
 
@@ -100,18 +119,41 @@ class ConvolutionalLayer(Layer):
         return result
     
 '''
-Updated Toy Code for testing layer
+Still more test code --- weight update, forward, backprop tests
+row1 = np.array([[1,1,0,1,0,0,1,1]])
+row2 = np.array([[1,1,1,1,0,0,1,0]])
+row3 = np.array([[0,0,1,1,0,1,0,1]])
+row4 = np.array([[1,1,1,0,1,1,1,0]])
+row5 = np.array([[1,1,1,1,1,0,1,1]])
+row6 = np.zeros((1,8))
+row7 = np.array([[0,1,1,1,1,0,0,1]])
+row8 = np.array([[1,0,1,0,0,1,0,1]])
+
+test = np.array([np.concatenate((row1, row2, row3, row4, row5, row6, row7, row8), axis=0)])
+
+dJdF = np.zeros((1,6,6))
+dJdF[0][0][1] = -2
+dJdF[0][3][4] = -2
+dJdF[0][4][1] = 6
+
+print(dJdF)
+print(test)
+
+for matrix in test:
+    print(matrix.shape[0])
+
+convLayer = ConvolutionalLayer(3)
+convLayer.forward(test)
+convLayer.updateWeights(dJdF)
+
 test = np.array([[[1,2,3],[2,2,3],[1,3,3]]])
 kernelTest1 = np.ones((1,2,2))
 convLayerTest1 = ConvolutionalLayer(2)
 convLayerTest1.setKernel(kernelTest1)
 convLayerTest1.forward(test)
-
 kernel = np.array([[[2,2,1],[-1,-1,0],[2,0,2]]])
-
 for kernelIdx, kernelMatrix in enumerate(kernel):
     kernel[kernelIdx] = np.transpose(kernelMatrix)
-
 gradIn = np.zeros((1,6,6))
 gradIn[0][0][1] = -2
 gradIn[0][2][2] = 1
@@ -119,5 +161,4 @@ gradIn[0][3][4] = -2
 gradIn[0][4][1] = 6
 convLayer = ConvolutionalLayer(3)
 convLayer.setKernel(kernel)
-print(convLayer.backward(gradIn))
-'''
+print(convLayer.backward(gradIn))'''
