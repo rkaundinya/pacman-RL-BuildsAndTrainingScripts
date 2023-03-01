@@ -33,7 +33,6 @@ class ConvolutionalLayer(Layer):
         for obsIdx, observation in enumerate(dataIn):
             result[obsIdx] = mhl.crossCorrelate(observation, self.kernel[obsIdx], numRowsToIterate, numColsToIterate)
 
-        print(result)
         self.setPrevOut(result)
 
     def updateWeights(self, gradIn, eta=0.0001):
@@ -49,9 +48,8 @@ class ConvolutionalLayer(Layer):
                 gradMatrix = gradIn[kernelIdx]
                 numRowsToIterate = matrix.shape[0] - gradMatrix.shape[0] + 1
                 numColsToIterate = matrix.shape[1] - gradMatrix.shape[1] + 1
-                debugTest = mhl.crossCorrelate(matrix, gradMatrix, numRowsToIterate, numColsToIterate)
                 kernelMatrix -= eta * mhl.crossCorrelate(matrix, gradMatrix, numRowsToIterate, numColsToIterate)
-
+        
     #Output: result, returns a tensor with each kernel matrix transposed
     def gradient(self):
         result = np.zeros(self.kernel.shape)
@@ -113,6 +111,8 @@ dJdF[0][0][1] = -2
 dJdF[0][3][4] = -2
 dJdF[0][4][1] = 6
 
+print(dJdF)
+
 convLayer = ConvolutionalLayer(3)
 convLayer.forward(test)
 convLayer.updateWeights(dJdF)
@@ -131,10 +131,13 @@ for kernelIdx, kernelMatrix in enumerate(kernel):
 
 gradIn = np.zeros((1,6,6))
 gradIn[0][0][1] = -2
-gradIn[0][2][2] = 1
 gradIn[0][3][4] = -2
 gradIn[0][4][1] = 6
 
+print("dJdF:")
+print(gradIn)
+
 convLayer = ConvolutionalLayer(3)
 convLayer.setKernel(kernel)
+print("Updated Kernel:")
 print(convLayer.backward(gradIn))'''
