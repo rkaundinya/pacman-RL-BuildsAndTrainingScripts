@@ -61,6 +61,7 @@ class ConvolutionalLayer(Layer):
         return result
 
     #Input: gradIn, a N x (H - M + 1) x (W - M + 1) tensor
+    #Output: a N x H x W tensor
     def backward(self, gradIn):
         padAmnt = math.ceil(self.kernelDim / 2)
 

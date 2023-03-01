@@ -7,7 +7,7 @@ class PoolingCalcBase(ABC):
         pass
 
     #Input: featureMapSnippet, the portion of the feature map you want to calculate on
-    #Output: result of custom pooling calculation
+    #Output: result of custom pooling calculation, array of pooling layer modified indices
     @abstractmethod
     def calculate(self, featureMapSnippet):
         pass
