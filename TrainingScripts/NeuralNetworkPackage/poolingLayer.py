@@ -1,5 +1,5 @@
-from layers import Layer
-from maxPoolingCalc import MaxPoolingCalc
+from . layers import Layer
+from . maxPoolingCalc import MaxPoolingCalc
 import numpy as np
 import math
 
@@ -48,6 +48,7 @@ class PoolingLayer(Layer):
             result[resultIdx] = self.poolCalc(featureMap, self.qRows, resultIdx, self.stride)
         
         self.setPrevOut(result)
+        return result
         
 
     def gradient(self):

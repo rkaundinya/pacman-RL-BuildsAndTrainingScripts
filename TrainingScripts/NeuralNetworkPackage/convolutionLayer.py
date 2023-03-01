@@ -1,7 +1,7 @@
+from . layers import Layer
 import numpy as np
 import math
-from layers import Layer
-import mathHelperLibrary as mhl
+import NeuralNetworkPackage.mathHelperLibrary as mhl
 
 class ConvolutionalLayer(Layer):
     #Input: kernelDimension, determines size of kernel K 
@@ -34,6 +34,7 @@ class ConvolutionalLayer(Layer):
             result[obsIdx] = mhl.crossCorrelate(observation, self.kernel[obsIdx], numRowsToIterate, numColsToIterate)
 
         self.setPrevOut(result)
+        return result
 
     def updateWeights(self, gradIn, eta=0.0001):
         prevIn = self.getPrevIn()
@@ -48,7 +49,8 @@ class ConvolutionalLayer(Layer):
                 gradMatrix = gradIn[kernelIdx]
                 numRowsToIterate = matrix.shape[0] - gradMatrix.shape[0] + 1
                 numColsToIterate = matrix.shape[1] - gradMatrix.shape[1] + 1
-                kernelMatrix -= eta * mhl.crossCorrelate(matrix, gradMatrix, numRowsToIterate, numColsToIterate)
+                dJdK = mhl.crossCorrelate(matrix, gradMatrix, numRowsToIterate, numColsToIterate)
+                kernelMatrix -= eta * dJdK
         
     #Output: result, returns a tensor with each kernel matrix transposed
     def gradient(self):

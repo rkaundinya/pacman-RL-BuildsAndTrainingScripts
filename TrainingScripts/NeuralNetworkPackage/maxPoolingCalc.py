@@ -1,4 +1,4 @@
-from poolingCalcBase import PoolingCalcBase
+from . poolingCalcBase import PoolingCalcBase
 import numpy as np
 
 class MaxPoolingCalc(PoolingCalcBase):
