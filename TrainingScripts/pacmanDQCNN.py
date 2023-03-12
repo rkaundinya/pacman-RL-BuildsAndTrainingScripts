@@ -8,8 +8,10 @@ from NeuralNetworkPackage.softmaxActivationLayer import SoftmaxActivationLayer
 from NeuralNetworkPackage.crossEntropyLayer import CrossEntropyLayer
 from NeuralNetworkPackage.model import Model
 from collections import deque
+import random
 import mlagents
 from mlagents_envs.environment import UnityEnvironment as UE
+from mlagents_envs.side_channel.engine_configuration_channel import EngineConfigurationChannel
 from mlagents_envs.base_env import (
     BaseEnv,
     DecisionSteps,
@@ -44,6 +46,48 @@ replayMemory = deque(maxlen=50_000)
 
 #Note - 0,1,2,3 action indices correspond to up, down, right, left respectively
 
+def train(inReplayMemory, inTrainingModel, inTargetModel, inDone):
+    learningRate = 0.7
+    discountFactor = 0.618
+
+    MIN_REPLAY_SIZE = 4
+    if (len(replayMemory) < MIN_REPLAY_SIZE):
+        return
+    
+    batchSize = 4
+    miniBatch = random.sample(replayMemory, batchSize)
+    #Get the observations from minibatch
+    currentStates = np.zeros((len(miniBatch), miniBatch[0][0].shape[1], miniBatch[0][0].shape[2]))
+    #Populate currentStates with observations
+    for idx, transition in enumerate(miniBatch):
+        currentStates[idx] = transition[0]
+
+    currentQsList = inTrainingModel.predict(currentStates)
+    newCurrentStates = np.zeros((len(miniBatch), miniBatch[0][3].shape[1], miniBatch[0][3].shape[2]))
+    #Populate newCurrentStates with subsequent observations
+    for idx, transition in enumerate(miniBatch):
+        newCurrentStates[idx] = transition[3]
+
+    futureQsList = inTargetModel.predict(newCurrentStates)
+
+    X = []
+    Y = []
+    for idx, (observation, action, reward, newObservation, done) in enumerate(miniBatch):
+        if not done:
+            maxFutureQ = reward + discountFactor * np.max(futureQsList[idx])
+        else:
+            maxFutureQ = reward
+
+        currentQs = currentQsList[idx]
+        actionNumerical = action.discrete[0][0]
+        currentQs[actionNumerical] = (1 - learningRate) * currentQs[actionNumerical] + learningRate * maxFutureQ
+
+        X.append(observation[0])
+        Y.append(currentQs)
+
+    inTrainingModel.train(np.array(X), np.array(Y))
+    return
+
 #Create empty random sized X array
 X = np.array([np.random.randint(8, size=168).reshape((12,14))])
 
@@ -71,8 +115,13 @@ maxValIdx = np.argmax(prediction)
 #Set action with predicted action
 predictedAction = ActionTuple(np.zeros((1,0)), np.array([[maxValIdx]]))
 
+#Create channel to specify run speed
+channel = EngineConfigurationChannel()
+
 #Open pacman environment
-env = UE(file_name='../MiniGameMap/Pacman', seed=1, side_channels=[])
+env = UE(file_name='../MiniGameMap/Pacman', seed=1, side_channels=[channel])
+
+channel.set_configuration_parameters(time_scale= 2.0)
 
 env.reset()
 
@@ -103,8 +152,11 @@ done = False
 episodeRewards = 0
 #RHS returns the id of the agent
 trackedAgent = decisionSteps.agent_id[0]
+stepsToUpdateTargetModel = 0
 
 while not done:
+    stepsToUpdateTargetModel += 1
+
     if trackedAgent == -1 and len(decisionSteps) >= 1:
         trackedAgent = decisionSteps.agent_id[0]
 
@@ -134,12 +186,19 @@ while not done:
         episodeRewards += lastStepReward
         done = True
 
-    decisionStepsObs = decisionSteps[0].obs
-    newObservation = np.array([np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))])
+    if not done:
+        decisionStepsObs = decisionSteps[0].obs
+        newObservation = np.array([np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))])
+    else:
+        newObservation = observation
 
     replayMemory.append([observation, action, lastStepReward, newObservation, done])
 
     observation = newObservation
+
+    #Update Final Model using Bellman Equation
+    if stepsToUpdateTargetModel %8 == 0 or done:
+        train(replayMemory, trainingModel, targetModel, done)
 
     EPSILON = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-DECAY * 1)
 

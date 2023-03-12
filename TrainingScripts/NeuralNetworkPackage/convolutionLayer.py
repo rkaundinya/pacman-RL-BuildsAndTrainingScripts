@@ -31,7 +31,8 @@ class ConvolutionalLayer(Layer):
 
         #Go through each observation 1-N
         for obsIdx, observation in enumerate(dataIn):
-            result[obsIdx] = mhl.crossCorrelate(observation, self.kernel[obsIdx], numRowsToIterate, numColsToIterate)
+            #TODO - currently only uses 1 kernel to forward prop here
+            result[obsIdx] = mhl.crossCorrelate(observation, self.kernel[0], numRowsToIterate, numColsToIterate)
 
         self.setPrevOut(result)
         return result
@@ -89,7 +90,8 @@ class ConvolutionalLayer(Layer):
             zPaddedGradIn[startingRowIdx:endingRowIdx, startingColIdx:endingColIdx] = gradInMatrix
             
             #Cross-correlate by kernel (K) transposed to get backcoming gradient
-            kernel = kernelsTransposed[matrixIdx]
+            #TODO - only supports a single kernel, allow for multiple
+            kernel = kernelsTransposed[0]
             result[matrixIdx] = mhl.crossCorrelate(zPaddedGradIn, kernel, numRowsToIterate, numColsToIterate)
 
         return result
