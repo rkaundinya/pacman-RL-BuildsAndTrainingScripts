@@ -49,7 +49,7 @@ class ConvolutionalLayer(Layer):
                 gradMatrix = gradIn[kernelIdx]
                 numRowsToIterate = matrix.shape[0] - gradMatrix.shape[0] + 1
                 numColsToIterate = matrix.shape[1] - gradMatrix.shape[1] + 1
-                dJdK = mhl.crossCorrelate(matrix, gradMatrix, numRowsToIterate, numColsToIterate)
+                dJdK = mhl.crossCorrelate(gradMatrix, matrix, numRowsToIterate, numColsToIterate)
                 kernelMatrix -= eta * dJdK
         
     #Output: result, returns a tensor with each kernel matrix transposed

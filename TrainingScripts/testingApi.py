@@ -4,6 +4,7 @@ https://github.com/Unity-Technologies/ml-agents/blob/develop/docs/Python-LLAPI-D
 '''
 
 import mlagents
+import numpy as np
 from mlagents_envs.environment import UnityEnvironment as UE
 from mlagents_envs.base_env import (
     BaseEnv,
@@ -15,6 +16,9 @@ from mlagents_envs.base_env import (
     AgentId,
     BehaviorMapping,
 )
+
+NUM_MAP_ROWS = 12
+NUM_MAP_COLS = 14
 
 env = UE(file_name='Pacman', seed=1, side_channels=[])
 
@@ -43,6 +47,8 @@ if agentActionSpec.is_discrete():
 #Print discrete array or access by randAction.discrete
 randAction = agentActionSpec.random_action(1)
 
+env.set_actions(behavior_name, randAction)
+
 env.reset()
 
 #Gets DecisionSteps object and TerminalSteps object
@@ -50,8 +56,18 @@ decision_steps, terminal_steps = env.get_steps(behavior_name)
 
 #list(decision_steps) gives you the id of the agent who is requesting a decision
 
-# Shows how you access the observations in decision steps
-print(decision_steps.obs)
+#Get the map state representation and reorder to grid size for CNN
+decisionStepsObs = decision_steps[0].obs
+orderedMapObs = np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))
+
+print(orderedMapObs)
+
+env.step()
+
+for i in range(10):
+    randAction = ActionTuple(np.zeros((1,0)), np.array([[3]]))
+    env.set_actions(behavior_name, randAction)
+    env.step()
 
 #Setting some loop params
 trackedAgent = -1
