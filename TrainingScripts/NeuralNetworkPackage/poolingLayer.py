@@ -35,17 +35,20 @@ class PoolingLayer(Layer):
         #Make result tensor
         windowDim = self.qRows
         n = dataIn.shape[0]
-        windowOutputNumRows = math.floor((dataIn.shape[1] - windowDim) / self.stride) + 1
-        windowOutputNumCols = math.floor((dataIn.shape[2] - windowDim) / self.stride) + 1
+        windowOutputNumRows = math.floor((dataIn.shape[2] - windowDim) / self.stride) + 1
+        windowOutputNumCols = math.floor((dataIn.shape[3] - windowDim) / self.stride) + 1
+        numFeatureMapsPerObs = dataIn.shape[1]
 
         #Keep track of the indices we choose from during forward pass
         #For later use in gradient pass; could be multiple indices depending on pooling 
         #implementation so need to have an array of modified indices per window output element
-        self.modifiedIndices = np.empty((n, windowOutputNumRows, windowOutputNumCols), dtype=np.ndarray)
+        self.modifiedIndices = np.empty((n, numFeatureMapsPerObs, windowOutputNumRows, windowOutputNumCols), dtype=np.ndarray)
 
-        result = np.zeros((n, windowOutputNumRows, windowOutputNumCols))
-        for resultIdx, featureMap in enumerate(dataIn):
-            result[resultIdx] = self.poolCalc(featureMap, self.qRows, resultIdx, self.stride)
+        result = np.zeros((n, numFeatureMapsPerObs, windowOutputNumRows, windowOutputNumCols))
+        for obsIdx, obsFeatureMaps in enumerate(dataIn):
+            for featureMapIdx, featureMap in enumerate(obsFeatureMaps):
+                result[obsIdx][featureMapIdx] = self.poolCalc(featureMap, self.qRows, obsIdx, featureMapIdx, self.stride)
+            
         
         self.setPrevOut(result)
         return result
@@ -62,22 +65,25 @@ class PoolingLayer(Layer):
         prevIn = self.getPrevIn()
         result = np.zeros(prevIn.shape)
 
-        for gradMatrixIdx, featureMap in enumerate(prevIn):
-            featureMap = np.zeros((featureMap.shape[0], featureMap.shape[1]))
-            gradMatrix = gradIn[gradMatrixIdx]
-            modifiedIndicesMatrix = self.modifiedIndices[gradMatrixIdx]
+        for obsIdx, observationGrad in enumerate(prevIn):
+            for gradMatrixIdx, featureMap in enumerate(observationGrad):
+                featureMap = np.zeros((featureMap.shape[0], featureMap.shape[1]))
+                gradMatrix = gradIn[obsIdx][gradMatrixIdx]
+                modifiedIndicesTensor = self.modifiedIndices[obsIdx]
 
-            rowsToIterate = modifiedIndicesMatrix.shape[0]
-            colsToIterate = modifiedIndicesMatrix.shape[1]
+                for modifiedIndicesMatrix in modifiedIndicesTensor:
+                    rowsToIterate = modifiedIndicesMatrix.shape[0]
+                    colsToIterate = modifiedIndicesMatrix.shape[1]
 
-            for row in range(rowsToIterate):
-                for col in range(colsToIterate):
-                    for tuple in modifiedIndicesMatrix[row][col]:
-                        result[gradMatrixIdx][tuple] = gradMatrix[row][col]
+                    for row in range(rowsToIterate):
+                        for col in range(colsToIterate):
+                            for tuple in modifiedIndicesMatrix[row][col]:
+                                result[obsIdx][gradMatrixIdx][tuple] = gradMatrix[row][col]
+        
                     
         return result
 
-    def poolCalc(self, dataIn, windowDim, observationNum, stride=1):
+    def poolCalc(self, dataIn, windowDim, observationNum, obsFeatureMapNum, stride=1):
         dataInNumRows = dataIn.shape[0]
         dataInNumCols = dataIn.shape[1]
 
@@ -86,7 +92,7 @@ class PoolingLayer(Layer):
 
         result = np.zeros((numRowsToIterate, numColsToIterate))
 
-        modifiedIndicesMatrix = self.modifiedIndices[observationNum]
+        modifiedIndicesMatrix = self.modifiedIndices[observationNum][obsFeatureMapNum]
 
         #Declare vars outside of loop for memory and compiler optimization
         featureMapSnippetRowStartIdx = 0

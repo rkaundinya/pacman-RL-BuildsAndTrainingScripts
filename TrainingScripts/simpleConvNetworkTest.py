@@ -21,19 +21,24 @@ row8 = np.array([[1,0,1,0,0,1,0,1]])
 X = np.array([np.concatenate((row1, row2, row3, row4, row5, row6, row7, row8), axis=0)])
 Y = np.array([[5]], dtype=float)
 
+FCLAYER_INPUTNUM = 8
+
 #Set up layers
 il = InputLayer(X, False)
 cl = ConvolutionalLayer(3)
 mpc = MaxPoolingCalc()
 pl = PoolingLayer(3, 3, 3, mpc)
 fl = FlatteningLayer()
-fcl = FullyConnectedLayer(4,1)
+fcl = FullyConnectedLayer(FCLAYER_INPUTNUM,1)
 lal = LinearLayer()
 sel = SquaredErrorLayer()
 
 #Setting weights
-clKernel = np.array([[[2, -1, 2], [2, -1, 0], [1, 0, 2]]], dtype=float)
-fclWeights = np.array([[-1],[0],[3],[-1]])
+clKernel = np.array([[[2, -1, 2], [2, -1, 0], [1, 0, 2]], [[2, -1, 2], [2, -1, 0], [1, 0, 2]]], dtype=float)
+fclWeights = np.array([[-1],[0],[3],[-1],[-1],[0],[3],[-1]])
+
+#clKernel = np.array([[[2, -1, 2], [2, -1, 0], [1, 0, 2]]], dtype=float)
+#fclWeights = np.array([[-1],[0],[3],[-1]])
 fclBiases = np.array([[0]])
 
 cl.setKernel(clKernel)

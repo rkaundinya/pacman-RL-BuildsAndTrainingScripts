@@ -32,7 +32,7 @@ NUM_MAP_COLS = 14
 #Number of agents in game
 NUM_AGENTS = 1
 
-#Training params
+'''Training Params'''
 #Max amount of exploration is 100%
 MAX_EPSILON = 1
 #Min amount of exploration by agent set to 1%
@@ -41,6 +41,9 @@ MIN_EPSILON = 0.01
 EPSILON = 1
 #Amount to scale epsilon decay by
 DECAY = 0.01
+#Number of training episodes
+NUM_TRAINING_EPISODES = 300
+NUM_TESTING_EPISODES = 100
 
 replayMemory = deque(maxlen=50_000)
 
@@ -50,12 +53,12 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inDone):
     learningRate = 0.7
     discountFactor = 0.618
 
-    MIN_REPLAY_SIZE = 4
-    if (len(replayMemory) < MIN_REPLAY_SIZE):
+    MIN_REPLAY_SIZE = 1000
+    if (len(inReplayMemory) < MIN_REPLAY_SIZE):
         return
     
-    batchSize = 4
-    miniBatch = random.sample(replayMemory, batchSize)
+    batchSize = 8
+    miniBatch = random.sample(inReplayMemory, batchSize)
     #Get the observations from minibatch
     currentStates = np.zeros((len(miniBatch), miniBatch[0][0].shape[1], miniBatch[0][0].shape[2]))
     #Populate currentStates with observations
@@ -121,7 +124,7 @@ channel = EngineConfigurationChannel()
 #Open pacman environment
 env = UE(file_name='../MiniGameMap/Pacman', seed=1, side_channels=[channel])
 
-channel.set_configuration_parameters(time_scale= 2.0)
+channel.set_configuration_parameters(time_scale= 5.0)
 
 env.reset()
 
@@ -154,52 +157,57 @@ episodeRewards = 0
 trackedAgent = decisionSteps.agent_id[0]
 stepsToUpdateTargetModel = 0
 
-while not done:
-    stepsToUpdateTargetModel += 1
+for episode in range(NUM_TRAINING_EPISODES):
+    episodeRewards = 0
+    trackedAgent = -1
+    done = False
+    while not done:
+        stepsToUpdateTargetModel += 1
 
-    if trackedAgent == -1 and len(decisionSteps) >= 1:
-        trackedAgent = decisionSteps.agent_id[0]
+        if trackedAgent == -1 and len(decisionSteps) >= 1:
+            trackedAgent = decisionSteps.agent_id[0]
 
-    randActionProb = np.random.rand()
+        randActionProb = np.random.rand()
 
-    #Explore with epsilon greedy strategy
-    if (randActionProb <= EPSILON):
-        action = agentActionSpec.random_action(NUM_AGENTS)
-    else:
-        #Get predicted action
-        prediction = trainingModel.predict(observation)
-        maxValIdx = np.argmax(prediction)
-        action = ActionTuple(np.zeros((1,0)), np.array([[maxValIdx]]))
+        #Explore with epsilon greedy strategy
+        if (randActionProb <= EPSILON):
+            action = agentActionSpec.random_action(NUM_AGENTS)
+        else:
+            #Get predicted action
+            prediction = trainingModel.predict(observation)
+            maxValIdx = np.argmax(prediction)
+            action = ActionTuple(np.zeros((1,0)), np.array([[maxValIdx]]))
+        
+        #Set action
+        env.set_actions(behaviorName, action)
+        env.step()
+
+        decisionSteps, terminalSteps = env.get_steps(behaviorName)
+        lastStepReward = 0
+        if trackedAgent in decisionSteps:
+            lastStepReward = decisionSteps[trackedAgent].reward
+            episodeRewards += lastStepReward
+
+        if trackedAgent in terminalSteps:
+            lastStepReward = terminalSteps[trackedAgent].reward
+            episodeRewards += lastStepReward
+            done = True
+
+        if not done:
+            decisionStepsObs = decisionSteps[trackedAgent].obs
+            newObservation = np.array([np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))])
+        else:
+            newObservation = observation
+
+        replayMemory.append([observation, action, lastStepReward, newObservation, done])
+
+        observation = newObservation
+
+        #Update Final Model using Bellman Equation
+        if stepsToUpdateTargetModel %8 == 0 or done:
+            train(replayMemory, trainingModel, targetModel, done)
+
+    #Update epsilon so we're less likely to take random action
+    EPSILON = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-DECAY * episode)
     
-    #Set action
-    env.set_actions(behaviorName, action)
-    env.step()
-
-    decisionSteps, terminalSteps = env.get_steps(behaviorName)
-    lastStepReward = 0
-    if trackedAgent in decisionSteps:
-        lastStepReward = decisionSteps[trackedAgent].reward
-        episodeRewards += lastStepReward
-
-    if trackedAgent in terminalSteps:
-        lastStepReward = terminalSteps[trackedAgent].reward
-        episodeRewards += lastStepReward
-        done = True
-
-    if not done:
-        decisionStepsObs = decisionSteps[0].obs
-        newObservation = np.array([np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))])
-    else:
-        newObservation = observation
-
-    replayMemory.append([observation, action, lastStepReward, newObservation, done])
-
-    observation = newObservation
-
-    #Update Final Model using Bellman Equation
-    if stepsToUpdateTargetModel %8 == 0 or done:
-        train(replayMemory, trainingModel, targetModel, done)
-
-    EPSILON = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-DECAY * 1)
-
-print("Total rewards for episode is " + str(episodeRewards))    
+    print("Total rewards for episode is " + str(episodeRewards))    
