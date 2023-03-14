@@ -203,9 +203,16 @@ for episode in range(NUM_TRAINING_EPISODES):
 
         observation = newObservation
 
-        #Update Final Model using Bellman Equation
+        #Update Training Model using Bellman Equation
         if stepsToUpdateTargetModel %8 == 0 or done:
             train(replayMemory, trainingModel, targetModel, done)
+
+        #Update target model weights every X steps
+        if stepsToUpdateTargetModel >= 120:
+            print("Copying trianing network weights to target network weights")
+            convLayerTrainingModelWeights, fcLayerTrainingModelWeights = trainingModel.getWeights()
+            targetModel.setWeights(convLayerTrainingModelWeights, fcLayerTrainingModelWeights)
+            stepsToUpdateTargetModel = 0
 
     #Update epsilon so we're less likely to take random action
     EPSILON = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-DECAY * episode)

@@ -9,12 +9,13 @@ def crossCorrelate(matrix1, kernel, numRowsToIterate, numColsToIterate):
     finalColIdx = matrix1.shape[1]
 
     result = np.zeros((numRowsToIterate, numColsToIterate))
-    kernelDim = kernel.shape[0]
+    kernelDimX = kernel.shape[0]
+    kernelDimY = kernel.shape[1]
     
     #Go through each row of feature map
-    for featureMapRowIdx, maxRow in enumerate(range(kernelDim - 1, finalRowIdx)):
+    for featureMapRowIdx, maxRow in enumerate(range(kernelDimX - 1, finalRowIdx)):
         #Go through each column of feature map
-        for featureMapColIdx, maxCol in enumerate(range(kernelDim - 1, finalColIdx)):
+        for featureMapColIdx, maxCol in enumerate(range(kernelDimY - 1, finalColIdx)):
             #Cache sum aggregator for compiler optimization
             currentFeatureMapSum = 0
 

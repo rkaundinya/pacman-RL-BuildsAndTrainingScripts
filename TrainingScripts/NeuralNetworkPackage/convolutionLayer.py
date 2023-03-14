@@ -17,6 +17,9 @@ class ConvolutionalLayer(Layer):
         assert newKernel.shape[1] == self.kernel.shape[1] and newKernel.shape[2] == self.kernel.shape[2], "Need to re-initialize layer with new dimensions"
         self.kernel = newKernel
 
+    def getKernel(self):
+        return self.kernel
+
     #Input: dataIn, N x H x W matrix
     #Output: N x (H - M + 1) x (W - M + 1) matrix where M is kernelDim
     def forward(self, dataIn):

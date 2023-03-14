@@ -8,6 +8,14 @@ class Model:
     def __init__(self, layers=[], eta=0.01):
         self.layers = layers
         self.eta = eta
+
+        self.fcLayers = []
+        self.convLayers = []
+        for layer in layers:
+            if (isinstance(layer, FullyConnectedLayer)):
+                self.fcLayers.append(layer)
+            if (isinstance(layer, ConvolutionalLayer)):
+                self.convLayers.append(layer)
         return
     
     def add(self, layer):
@@ -15,6 +23,11 @@ class Model:
             self.layers.append(layer)
         else:
             TypeError(layer)
+
+        if (isinstance(layer, FullyConnectedLayer)):
+            self.fcLayers.append(layer)
+        if (isinstance(layer, ConvolutionalLayer)):
+            self.convLayers.append(layer)
     
     #Inputs: x, input to network
     #Inputs: y, expected output for input
@@ -46,3 +59,26 @@ class Model:
                 return h
 
             h = layer.forward(h)
+
+    def getWeights(self):
+        convLayersWeights = [None] * len(self.convLayers)
+        fcLayersWeights = [None] * (len(self.fcLayers) * 2)
+
+        for convLayerIdx, convLayer in enumerate(self.convLayers):
+            convLayersWeights[convLayerIdx] = convLayer.getKernel()
+
+        for fcLayerIdx in range(0, len(self.fcLayers), 2):
+            fcLayersWeights[fcLayerIdx] = self.fcLayers[fcLayerIdx].getWeights()
+            fcLayersWeights[fcLayerIdx+1] = self.fcLayers[fcLayerIdx].getBiases()
+
+        return convLayersWeights, fcLayersWeights
+            
+    #TODO - add an assert here that makes sure same num input weights and model weights
+    def setWeights(self, convLayersWeights, fcLayersWeights):
+        if (len(self.convLayers) != 0):
+            for convLayerIdx, convLayerWeights in enumerate(convLayersWeights):
+                self.convLayers[convLayerIdx].setKernel(convLayerWeights)
+        if (len(self.fcLayers) != 0):
+            for idx in range(0, len(self.fcLayers), 2):
+                self.fcLayers[idx].setWeights(fcLayersWeights[idx])
+                self.fcLayers[idx].setBiases(fcLayersWeights[idx+1])
