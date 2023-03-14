@@ -9,16 +9,32 @@ class ConvolutionalLayer(Layer):
     #Input: numKernels, the number of kernel matrices of kernel tensor
     #Output: None
     def __init__(self, kernelDimension, numKernels=1):
-        self.kernelDim = kernelDimension
+        self.kernelDims = [kernelDimension]
         assert numKernels >= 1, "Trying to make kernel tensor with less than one entry"
-        self.kernel = np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(numKernels, kernelDimension, kernelDimension))
+        self.kernels = []
+        for i in range(numKernels):
+            self.kernels.append(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(kernelDimension, kernelDimension)))
 
-    def setKernel(self, newKernel):
-        assert newKernel.shape[1] == self.kernel.shape[1] and newKernel.shape[2] == self.kernel.shape[2], "Need to re-initialize layer with new dimensions"
-        self.kernel = newKernel
+    def addKernel(self, newKernel):
+        self.kernels.append(newKernel)
+        self.kernelDims.append(newKernel.shape[0])
 
-    def getKernel(self):
-        return self.kernel
+    def addKernels(self, newKernels):
+        for newKernel in newKernels:
+            self.kernels.append(newKernel)
+            self.kernelDims.append(newKernel.shape[0])
+
+    #Input: list of kernels
+    def setKernels(self, newKernels):
+        self.kernelDims = np.zeros((len(newKernels)), dtype=int)
+        for newKernelIdx, newKernel in enumerate(newKernels):
+            assert newKernel.shape[0] == self.kernels[newKernelIdx].shape[0] and newKernel.shape[1] == self.kernels[newKernelIdx].shape[1], "Need to re-initialize layer with new dimensions"
+            self.kernelDims[newKernelIdx] = newKernel.shape[0]
+        
+        self.kernels = newKernels
+
+    def getKernels(self):
+        return self.kernels
 
     #Input: dataIn, N x H x W matrix
     #Output: N x (H - M + 1) x (W - M + 1) matrix where M is kernelDim
@@ -27,17 +43,16 @@ class ConvolutionalLayer(Layer):
         n = dataIn.shape[0]
         h = dataIn.shape[1]
         w = dataIn.shape[2]
-        numRowsToIterate = h - self.kernelDim + 1
-        numColsToIterate = w - self.kernelDim + 1
 
-        numKernels = self.kernel.shape[0]
+        numKernels = len(self.kernels)
 
-        result = np.zeros((n, numKernels, numRowsToIterate, numColsToIterate))
+        result = np.zeros((n, numKernels), dtype=np.ndarray)
 
         #Go through each observation 1-N
         for obsIdx, observation in enumerate(dataIn):
-            for kernelIdx, kernel in enumerate(self.kernel):
-                #TODO - currently only uses 1 kernel to forward prop here
+            for kernelIdx, kernel in enumerate(self.kernels):
+                numRowsToIterate = h - kernel.shape[0] + 1
+                numColsToIterate = w - kernel.shape[0] + 1
                 result[obsIdx][kernelIdx] = mhl.crossCorrelate(observation, kernel, numRowsToIterate, numColsToIterate)
 
         self.setPrevOut(result)
@@ -52,7 +67,7 @@ class ConvolutionalLayer(Layer):
         numColsToIterate = 0
 
         for obsNum, matrix in enumerate(prevIn):
-            for kernelIdx, kernelMatrix in enumerate(self.kernel):
+            for kernelIdx, kernelMatrix in enumerate(self.kernels):
                 gradMatrix = gradIn[obsNum][kernelIdx]
                 numRowsToIterate = matrix.shape[0] - gradMatrix.shape[0] + 1
                 numColsToIterate = matrix.shape[1] - gradMatrix.shape[1] + 1
@@ -61,8 +76,8 @@ class ConvolutionalLayer(Layer):
         
     #Output: result, returns a tensor with each kernel matrix transposed
     def gradient(self):
-        result = np.zeros(self.kernel.shape)
-        for resultIdx, kernelMatrix in enumerate(self.kernel):
+        result = np.zeros((len(self.kernels)), dtype=np.ndarray)
+        for resultIdx, kernelMatrix in enumerate(self.kernels):
             result[resultIdx] = np.transpose(kernelMatrix)
 
         return result
@@ -70,35 +85,42 @@ class ConvolutionalLayer(Layer):
     #Input: gradIn, a N x (H - M + 1) x (W - M + 1) tensor
     #Output: a N x H x W tensor
     def backward(self, gradIn):
-        padAmnt = math.ceil(self.kernelDim / 2)
-
-        oldXDimension = gradIn[0].shape[1]
-        oldYDimension = gradIn[0].shape[2]
-        
-        newXDimension = oldXDimension + 2 * padAmnt
-        newYDimension = oldYDimension + 2 * padAmnt
-
-        numRowsToIterate = newXDimension - self.kernelDim + 1
-        numColsToIterate = newYDimension - self.kernelDim + 1
-
-        result = np.zeros((gradIn.shape[0], numRowsToIterate, numColsToIterate))
+        prevIn = self.getPrevIn()
+        result = np.zeros(prevIn.shape)
         kernelsTransposed = self.gradient()
 
+        #TODO - average max pool backcoming gradients for two gradients assigned to 
+        #same zPad location; update loop so it works with multiple sized multiple kernels
         for gradInIdx, gradInTensor in enumerate(gradIn):
             for matrixIdx, gradInMatrix in enumerate(gradInTensor):
+                #Get pad amount for kernel
+                padAmnt = self.kernelDims[matrixIdx] - 1
+                #Offset starting row and col idx by pad amount
+                startingRowIdx = padAmnt
+                startingColIdx = padAmnt
+                #Cache old gradient matrix size
+                oldXDimension = gradInMatrix.shape[0]
+                oldYDimension = gradInMatrix.shape[1]
+                #Offset ending row and col idx by old dimensions
+                endingRowIdx = startingRowIdx + oldXDimension
+                endingColIdx = oldYDimension + padAmnt
+
+                #Get new x and y needed to pad and get proper cross-correlate dimensions for result
+                newXDimension = oldXDimension + 2 * padAmnt
+                newYDimension = oldYDimension + 2 * padAmnt
+
+                #
+                numRowsToIterate = newXDimension - self.kernelDims[matrixIdx] + 1
+                numColsToIterate = newYDimension - self.kernelDims[matrixIdx] + 1
+
                 #Pad gradient in with 0's to match dimensions of previous X input
                 zPaddedGradIn = np.zeros((newXDimension, newYDimension))
-
-                startingRowIdx = padAmnt
-                endingRowIdx = startingRowIdx + oldXDimension
-                startingColIdx = padAmnt
-                endingColIdx = oldYDimension + padAmnt
                 
                 zPaddedGradIn[startingRowIdx:endingRowIdx, startingColIdx:endingColIdx] = gradInMatrix
                 
                 #Cross-correlate by kernel (K) transposed to get backcoming gradient
-                #TODO - only supports a single kernel, allow for multiple
-                result[gradInIdx] += mhl.crossCorrelate(zPaddedGradIn, kernelsTransposed[matrixIdx], numRowsToIterate, numColsToIterate)
+                crossCorrResult = mhl.crossCorrelate(zPaddedGradIn, kernelsTransposed[matrixIdx], numRowsToIterate, numColsToIterate)
+                result[gradInIdx] += crossCorrResult
             result[gradInIdx] /= kernelsTransposed.shape[0]
 
         return result

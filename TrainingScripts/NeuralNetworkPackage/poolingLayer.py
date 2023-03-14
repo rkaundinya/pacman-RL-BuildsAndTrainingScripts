@@ -32,19 +32,15 @@ class PoolingLayer(Layer):
     #        where each feature map in dataIn is DxE and pooling window is QxQ
     def forward(self, dataIn):
         self.setPrevIn(dataIn)
-        #Make result tensor
-        windowDim = self.qRows
-        n = dataIn.shape[0]
-        windowOutputNumRows = math.floor((dataIn.shape[2] - windowDim) / self.stride) + 1
-        windowOutputNumCols = math.floor((dataIn.shape[3] - windowDim) / self.stride) + 1
-        numFeatureMapsPerObs = dataIn.shape[1]
+        n = len(dataIn)
+        numFeatureMapsPerObs = len(dataIn[0])
 
         #Keep track of the indices we choose from during forward pass
         #For later use in gradient pass; could be multiple indices depending on pooling 
         #implementation so need to have an array of modified indices per window output element
-        self.modifiedIndices = np.empty((n, numFeatureMapsPerObs, windowOutputNumRows, windowOutputNumCols), dtype=np.ndarray)
+        self.modifiedIndices = np.zeros((n, numFeatureMapsPerObs), dtype=np.ndarray)
 
-        result = np.zeros((n, numFeatureMapsPerObs, windowOutputNumRows, windowOutputNumCols))
+        result = np.zeros((n, numFeatureMapsPerObs), dtype=np.ndarray)
         for obsIdx, obsFeatureMaps in enumerate(dataIn):
             for featureMapIdx, featureMap in enumerate(obsFeatureMaps):
                 result[obsIdx][featureMapIdx] = self.poolCalc(featureMap, self.qRows, obsIdx, featureMapIdx, self.stride)
@@ -63,23 +59,24 @@ class PoolingLayer(Layer):
     #        and MxM are dimensions of convolutional kernel
     def backward(self, gradIn):
         prevIn = self.getPrevIn()
-        result = np.zeros(prevIn.shape)
+        numPrevInFeatureMaps = len(prevIn[0])
+        result = np.zeros(prevIn.shape, dtype=np.ndarray)
 
-        for obsIdx, observationGrad in enumerate(prevIn):
-            for gradMatrixIdx, featureMap in enumerate(observationGrad):
+        for obsIdx, prevInTensor in enumerate(prevIn):
+            modifiedIndicesTensor = self.modifiedIndices[obsIdx]
+            for gradMatrixIdx, featureMap in enumerate(prevInTensor):
                 featureMap = np.zeros((featureMap.shape[0], featureMap.shape[1]))
                 gradMatrix = gradIn[obsIdx][gradMatrixIdx]
-                modifiedIndicesTensor = self.modifiedIndices[obsIdx]
+                result[obsIdx][gradMatrixIdx] = np.zeros(featureMap.shape)
+                modifiedIndicesMatrix = modifiedIndicesTensor[gradMatrixIdx]
+                rowsToIterate = modifiedIndicesMatrix.shape[0]
+                colsToIterate = modifiedIndicesMatrix.shape[1]
 
-                for modifiedIndicesMatrix in modifiedIndicesTensor:
-                    rowsToIterate = modifiedIndicesMatrix.shape[0]
-                    colsToIterate = modifiedIndicesMatrix.shape[1]
-
-                    for row in range(rowsToIterate):
-                        for col in range(colsToIterate):
-                            for tuple in modifiedIndicesMatrix[row][col]:
-                                result[obsIdx][gradMatrixIdx][tuple] = gradMatrix[row][col]
-        
+                for row in range(rowsToIterate):
+                    for col in range(colsToIterate):
+                        for tuple in modifiedIndicesMatrix[row][col]:
+                            result[obsIdx][gradMatrixIdx][tuple] = gradMatrix[row][col]
+                                
                     
         return result
 
@@ -92,7 +89,7 @@ class PoolingLayer(Layer):
 
         result = np.zeros((numRowsToIterate, numColsToIterate))
 
-        modifiedIndicesMatrix = self.modifiedIndices[observationNum][obsFeatureMapNum]
+        self.modifiedIndices[observationNum][obsFeatureMapNum] = np.zeros((numRowsToIterate, numColsToIterate), dtype=np.ndarray)
 
         #Declare vars outside of loop for memory and compiler optimization
         featureMapSnippetRowStartIdx = 0
@@ -119,7 +116,7 @@ class PoolingLayer(Layer):
                     modifiedIndex = (featureMapSnippetRowStartIdx + modifiedIndex[0], featureMapSnippetColStartIdx + modifiedIndex[1])
                     modifiedIndicesEntries[modifiedIndexEntryIdx] = modifiedIndex
 
-                modifiedIndicesMatrix[featureMapRowIdx][featureMapColIdx] = modifiedIndicesEntries
+                self.modifiedIndices[observationNum][obsFeatureMapNum][featureMapRowIdx][featureMapColIdx] = modifiedIndicesEntries
 
         return result
     

@@ -39,8 +39,6 @@ class Model:
         if (isinstance(self.layers[-1], ObjectiveLayer)):
             loss = self.layers[-1].eval(y, prediction)
 
-        print(loss)
-
         gradient = self.layers[-1].gradient(y, prediction)
 
         for i in range(len(self.layers) - 2, 0, -1):
@@ -61,23 +59,32 @@ class Model:
             h = layer.forward(h)
 
     def getWeights(self):
-        convLayersWeights = [None] * len(self.convLayers)
+        numConvLayers = len(self.convLayers)
+        numKernelsPerObs = 0
+        if numConvLayers > 0:
+            numKernelsPerObs = len(self.convLayers[0].getKernels())
+            convLayersWeights = [None] * numConvLayers * numKernelsPerObs
+        
         fcLayersWeights = [None] * (len(self.fcLayers) * 2)
 
         for convLayerIdx, convLayer in enumerate(self.convLayers):
-            convLayersWeights[convLayerIdx] = convLayer.getKernel()
+            for kernelIdx, kernel in enumerate(convLayer.getKernels()):
+                convLayersWeights[convLayerIdx*numKernelsPerObs + kernelIdx] = kernel
 
         for fcLayerIdx in range(0, len(self.fcLayers), 2):
             fcLayersWeights[fcLayerIdx] = self.fcLayers[fcLayerIdx].getWeights()
             fcLayersWeights[fcLayerIdx+1] = self.fcLayers[fcLayerIdx].getBiases()
 
-        return convLayersWeights, fcLayersWeights
+        return convLayersWeights, numKernelsPerObs, fcLayersWeights
             
     #TODO - add an assert here that makes sure same num input weights and model weights
-    def setWeights(self, convLayersWeights, fcLayersWeights):
+    def setWeights(self, convLayersWeights, numKernelsPerObs, fcLayersWeights):
         if (len(self.convLayers) != 0):
-            for convLayerIdx, convLayerWeights in enumerate(convLayersWeights):
-                self.convLayers[convLayerIdx].setKernel(convLayerWeights)
+            for convLayerIdx in range(0, len(convLayersWeights), numKernelsPerObs):
+                kernelsStartIdx = convLayerIdx * numKernelsPerObs
+                kernelsEndIdx = kernelsStartIdx + numKernelsPerObs
+                obsKernels = convLayersWeights[kernelsStartIdx:kernelsEndIdx]
+                self.convLayers[convLayerIdx].setKernels(obsKernels)
         if (len(self.fcLayers) != 0):
             for idx in range(0, len(self.fcLayers), 2):
                 self.fcLayers[idx].setWeights(fcLayersWeights[idx])
