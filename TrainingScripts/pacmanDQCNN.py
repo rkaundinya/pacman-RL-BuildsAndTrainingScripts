@@ -27,6 +27,9 @@ from mlagents_envs.base_env import (
 
 import numpy as np
 
+#Whether to serialize weights with custom file path (since Rob's run directory is different than Ram's)
+USE_CUSTOM_FILE_PATH = True
+
 #Constant board size params
 NUM_MAP_ROWS = 12
 NUM_MAP_COLS = 14
@@ -48,27 +51,40 @@ NUM_TRAINING_EPISODES = 300
 NUM_TESTING_EPISODES = 100
 #Max number of stored replay memories
 MAX_REPLAYMEMORY_SIZE = 1000
+#Replay memory to delete when maxed
+NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX = 250
 #Replay memory batch size for training
 REPLAY_MEMORY_BATCH_SIZE = 50
 #Minimum number of replays to train
-MIN_REPLAY_SIZE = 500
+MIN_REPLAY_SIZE = 100
 #Train every x steps
-NUM_STEPS_TILL_TRAIN = 60
+NUM_STEPS_TILL_TRAIN = 100
 #Update target model every x steps
-NUM_STEPS_TILL_UPDATE_TARGET = 120
+NUM_STEPS_TILL_UPDATE_TARGET = 250
 
-replayMemory = deque(maxlen=MAX_REPLAYMEMORY_SIZE)
+assert NUM_STEPS_TILL_TRAIN <= NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX, "Make sure you are setting num steps till training to be <= than replay batch size to delete"
+assert REPLAY_MEMORY_BATCH_SIZE <= MIN_REPLAY_SIZE, "Min Replay Size must be at least as big as replay batch size"
+
+#replayMemory = deque(maxlen=MAX_REPLAYMEMORY_SIZE)
+replayMemory = np.zeros((MAX_REPLAYMEMORY_SIZE), dtype=np.ndarray)
+toAddReplayMemIdx = 0
+numAddedReplayMems = 0
 
 #Note - 0,1,2,3 action indices correspond to up, down, right, left respectively
 
-def train(inReplayMemory, inTrainingModel, inTargetModel, inDone):
+def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, inDone):
     learningRate = 0.7
     discountFactor = 0.618
 
-    if (len(inReplayMemory) < MIN_REPLAY_SIZE):
-        return
-    
-    miniBatch = random.sample(inReplayMemory, REPLAY_MEMORY_BATCH_SIZE)
+    numAddedReplayMems = inNumAddedReplayMems
+    if (numAddedReplayMems < MIN_REPLAY_SIZE):
+        return numAddedReplayMems
+
+    miniBatch = inReplayMemory[:numAddedReplayMems]
+    np.random.shuffle(miniBatch)
+    inReplayMemory = miniBatch
+    miniBatch = miniBatch[:REPLAY_MEMORY_BATCH_SIZE]
+
     #Get the observations from minibatch
     currentStates = np.zeros((len(miniBatch), miniBatch[0][0].shape[1], miniBatch[0][0].shape[2]))
     #Populate currentStates with observations
@@ -83,8 +99,11 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inDone):
 
     futureQsList = inTargetModel.predict(newCurrentStates)
 
-    X = []
-    Y = []
+    obsNumRows = miniBatch[0][0].shape[1]
+    obsNumCols = miniBatch[0][0].shape[2]
+    numPredictions = currentQsList[0].shape[0]
+    X = np.zeros((REPLAY_MEMORY_BATCH_SIZE, obsNumRows, obsNumCols))
+    Y = np.zeros((REPLAY_MEMORY_BATCH_SIZE, numPredictions))
     for idx, (observation, action, reward, newObservation, done) in enumerate(miniBatch):
         if not done:
             maxFutureQ = reward + discountFactor * np.max(futureQsList[idx])
@@ -95,11 +114,16 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inDone):
         actionNumerical = action.discrete[0][0]
         currentQs[actionNumerical] = (1 - learningRate) * currentQs[actionNumerical] + learningRate * maxFutureQ
 
-        X.append(observation[0])
-        Y.append(currentQs)
+        X[idx] = observation[0]
+        Y[idx] = currentQs
 
-    inTrainingModel.train(np.array(X), np.array(Y))
-    return
+    inTrainingModel.train(X, Y)
+
+    if (numAddedReplayMems >= MAX_REPLAYMEMORY_SIZE):
+        inReplayMemory[numAddedReplayMems-NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX:numAddedReplayMems] = None
+            
+        numAddedReplayMems -= NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX
+    return numAddedReplayMems
 
 #Create empty random sized X array
 X = np.array([np.random.randint(8, size=168).reshape((12,14)), np.random.randint(8, size=168).reshape((12,14))])
@@ -230,13 +254,18 @@ for episode in range(NUM_TRAINING_EPISODES):
             else:
                 newObservation = observation
 
-            replayMemory.append([observation, action, lastStepReward, newObservation, done])
+            replayMemory[toAddReplayMemIdx] = np.array([observation, action, lastStepReward, newObservation, done])
+
+            toAddReplayMemIdx += 1
+            numAddedReplayMems += 1
 
             observation = newObservation
 
             #Update Training Model using Bellman Equation
-            if stepsToUpdateTargetModel % NUM_STEPS_TILL_TRAIN == 0 or done:
-                train(replayMemory, trainingModel, targetModel, done)
+            if stepsToUpdateTargetModel % NUM_STEPS_TILL_TRAIN == 0 or toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE or done:
+                numAddedReplayMems = train(replayMemory, trainingModel, targetModel, numAddedReplayMems, done)
+                if numAddedReplayMems < toAddReplayMemIdx:
+                    toAddReplayMemIdx = numAddedReplayMems
 
             #Update target model weights every X steps
             if stepsToUpdateTargetModel >= NUM_STEPS_TILL_UPDATE_TARGET:
@@ -251,4 +280,8 @@ for episode in range(NUM_TRAINING_EPISODES):
     #Log rewards
     rewardsLogFile = open('./Logs/episodeRewards.txt', 'a')
     print("Total rewards for episode " + str(episode) + " with epsilon " + str(EPSILON) + ": " + str(episodeRewards), file=rewardsLogFile)    
+    if (USE_CUSTOM_FILE_PATH):
+        trainingModel.serialize("NPY_FILES/")
+    else:
+        trainingModel.serialize()
     rewardsLogFile.close()

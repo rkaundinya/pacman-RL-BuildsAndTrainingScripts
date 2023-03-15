@@ -63,7 +63,7 @@ class Model:
 
     #Inputs: None
     #Serializes the weight matrix, bias vector and kernel matrix into a .npy file
-    def serialize(self):
+    def serialize(self, filePath=None):
         serialList = []
         for layer in self.fcLayers:
             w = layer.getWeights() 
@@ -74,7 +74,10 @@ class Model:
             k = layer.getKernels()
             serialList.append(k.copy())
         time_now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        np.save('TrainingScripts/NPY_Files/'+time_now+'_FC_'+str(len(self.fcLayers))+'_CONV_'+str(len(self.convLayers)), np.array(serialList, dtype=object), allow_pickle=True)
+        if (filePath == None):
+            np.save('TrainingScripts/NPY_Files/'+time_now+'_FC_'+str(len(self.fcLayers))+'_CONV_'+str(len(self.convLayers)), np.array(serialList, dtype=object), allow_pickle=True)
+        else:
+            np.save(filePath+time_now+'_FC_'+str(len(self.fcLayers))+'_CONV_'+str(len(self.convLayers)), np.array(serialList, dtype=object), allow_pickle=True)
         return 
     
     #Inputs: None
