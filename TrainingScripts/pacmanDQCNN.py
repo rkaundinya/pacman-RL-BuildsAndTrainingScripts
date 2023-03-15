@@ -28,7 +28,7 @@ from mlagents_envs.base_env import (
 import numpy as np
 
 #Whether to serialize weights with custom file path (since Rob's run directory is different than Ram's)
-USE_CUSTOM_FILE_PATH = True
+USE_CUSTOM_FILE_PATH = False
 
 #Constant board size params
 NUM_MAP_ROWS = 12
