@@ -3,6 +3,9 @@ from . convolutionLayer import ConvolutionalLayer
 from . fullyConnectedLayer import FullyConnectedLayer
 from . objectiveLayer import ObjectiveLayer
 import numpy as np
+from datetime import datetime
+import os.path
+import re
 
 class Model:
     def __init__(self, layers=[], eta=0.01):
@@ -57,6 +60,52 @@ class Model:
                 return h
 
             h = layer.forward(h)
+
+    #Inputs: None
+    #Serializes the weight matrix, bias vector and kernel matrix into a .npy file
+    def serialize(self):
+        serialList = []
+        for layer in self.fcLayers:
+            w = layer.getWeights() 
+            b = layer.getBiases()
+            serialList.append(w.copy())
+            serialList.append(b.copy())
+        for layer in self.convLayers:
+            k = layer.getKernels()
+            serialList.append(k.copy())
+        time_now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        np.save('TrainingScripts/NPY_Files/'+time_now+'_FC_'+str(len(self.fcLayers))+'_CONV_'+str(len(self.convLayers)), np.array(serialList, dtype=object), allow_pickle=True)
+        return 
+    
+    #Inputs: None
+    #Loads the weight matrix, bias vector and kernel matrix from a .npy file
+    def load(self, fileName):
+        fcCount = 0 
+        convCount = 0
+        if os.path.isfile('TrainingScripts/NPY_Files/'+fileName):
+            m = re.findall('_(\d+)', 'TrainingScripts/NPY_Files/'+fileName)
+        else:
+            print("File does not exist")
+            return False
+        fcCount += int(m[0])
+        convCount += int(m[1])
+        if fcCount != len(self.fcLayers) or  convCount!= len(self.convLayers):
+            print("Error: Mismatch in Architectures between load file and current architecture")
+            return False
+        
+        data = np.load('TrainingScripts/NPY_Files/'+fileName, allow_pickle=True)
+        i=0
+        for layer in self.fcLayers:
+            layer.setWeights(data[i])
+            layer.setBiases(data[i+1])
+            i+=2
+
+        for layer in self.convLayers:
+            layer.setKernels(data[i])
+            
+        return True
+
+
 
     def getWeights(self):
         numConvLayers = len(self.convLayers)
