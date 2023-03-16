@@ -69,7 +69,7 @@ class FlatteningLayer(Layer):
                 currentKernelRowSize = self.prevInRowDims[2*matrixIdx + kernelIdx]
                 currentKernelColSize = self.prevInColDims[2*matrixIdx + kernelIdx]
                 kernelSize = currentKernelRowSize * currentKernelColSize
-                startIdx += endIdx
+                startIdx = endIdx
                 endIdx = startIdx + kernelSize
                 result[matrixIdx][kernelIdx] = np.reshape(row[startIdx:endIdx], (currentKernelRowSize, currentKernelColSize))
             
