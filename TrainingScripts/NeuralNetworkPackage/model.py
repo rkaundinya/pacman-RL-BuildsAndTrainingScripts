@@ -11,7 +11,7 @@ class Model:
     def __init__(self, layers=[], eta=0.01):
         self.layers = layers
         self.eta = eta
-        self.folder == ''
+        self.folder = ''
 
         self.fcLayers = []
         self.convLayers = []
