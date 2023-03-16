@@ -11,6 +11,7 @@ class Model:
     def __init__(self, layers=[], eta=0.01):
         self.layers = layers
         self.eta = eta
+        self.folder == ''
 
         self.fcLayers = []
         self.convLayers = []
@@ -63,7 +64,7 @@ class Model:
 
     #Inputs: None
     #Serializes the weight matrix, bias vector and kernel matrix into a .npy file
-    def serialize(self, filePath=None):
+    def serialize(self):
         serialList = []
         for layer in self.fcLayers:
             w = layer.getWeights() 
@@ -74,10 +75,12 @@ class Model:
             k = layer.getKernels()
             serialList.append(k.copy())
         time_now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        if (filePath == None):
-            np.save('TrainingScripts/NPY_Files/'+time_now+'_FC_'+str(len(self.fcLayers))+'_CONV_'+str(len(self.convLayers)), np.array(serialList, dtype=object), allow_pickle=True)
+        if self.folder == '':
+            self.folder = time_now+'_FC_'+str(len(self.fcLayers))+'_CONV_'+str(len(self.convLayers))
+            os.mkdir('TrainingScripts/NPY_Files/'+self.folder)
+            np.save('TrainingScripts/NPY_Files/'+self.folder+'/'+time_now+'_FC_'+str(len(self.fcLayers))+'_CONV_'+str(len(self.convLayers)), np.array(serialList, dtype=object), allow_pickle=True)
         else:
-            np.save(filePath+time_now+'_FC_'+str(len(self.fcLayers))+'_CONV_'+str(len(self.convLayers)), np.array(serialList, dtype=object), allow_pickle=True)
+            np.save('TrainingScripts/NPY_Files/'+self.folder+'/'+time_now+'_FC_'+str(len(self.fcLayers))+'_CONV_'+str(len(self.convLayers)), np.array(serialList, dtype=object), allow_pickle=True)
         return 
     
     #Inputs: None
