@@ -28,7 +28,6 @@ class ConvolutionalLayer(Layer):
     def setKernels(self, newKernels):
         self.kernelDims = np.zeros((len(newKernels)), dtype=int)
         for newKernelIdx, newKernel in enumerate(newKernels):
-            assert newKernel.shape[0] == self.kernels[newKernelIdx].shape[0] and newKernel.shape[1] == self.kernels[newKernelIdx].shape[1], "Need to re-initialize layer with new dimensions"
             self.kernelDims[newKernelIdx] = newKernel.shape[0]
         
         self.kernels = newKernels
