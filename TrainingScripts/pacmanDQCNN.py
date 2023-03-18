@@ -8,9 +8,9 @@ from NeuralNetworkPackage.reLuLayer import ReLuLayer
 from NeuralNetworkPackage.logisticSigmoidLayer import LogisticSigmoidLayer
 from NeuralNetworkPackage.softmaxActivationLayer import SoftmaxActivationLayer
 from NeuralNetworkPackage.crossEntropyLayer import CrossEntropyLayer
+from NeuralNetworkPackage.adamWeightUpdateCalc import AdamWeightUpdateCalc
 from NeuralNetworkPackage.squaredErrorLayer import SquaredErrorLayer
 from NeuralNetworkPackage.model import Model
-from collections import deque
 import random
 import mlagents
 from mlagents_envs.environment import UnityEnvironment as UE
@@ -139,31 +139,42 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, 
 X = np.array([np.random.randint(8, size=168).reshape((12,14)), np.random.randint(8, size=168).reshape((12,14))])
 
 #Set up layers
-il = InputLayer(X, False)
-cl = ConvolutionalLayer(8)
+tril = InputLayer(X, False)
+tail = InputLayer(X, False)
+trcl = ConvolutionalLayer(8)
+tacl = ConvolutionalLayer(8)
 mpc = MaxPoolingCalc()
-pl = PoolingLayer(3, 3, 2, mpc)
-fl = FlatteningLayer()
-fcl = FullyConnectedLayer(320,4)
-lsl = LogisticSigmoidLayer()
+trpl = PoolingLayer(3, 3, 2, mpc)
+tapl = PoolingLayer(3, 3, 2, MaxPoolingCalc())
+trfl = FlatteningLayer()
+tafl = FlatteningLayer()
+trfcl = FullyConnectedLayer(320,4, AdamWeightUpdateCalc())
+tafcl = FullyConnectedLayer(320,4, AdamWeightUpdateCalc())
+trlsl = LogisticSigmoidLayer()
+talsl = LogisticSigmoidLayer()
 sal = SoftmaxActivationLayer()
 cel = CrossEntropyLayer()
 
 #Alternate activation and objective funcs (DeepMind paper used)
-rll = ReLuLayer()
-sel = SquaredErrorLayer()
+trrll1 = ReLuLayer()
+tarll1 = ReLuLayer()
+trrll2 = ReLuLayer()
+tarll2 = ReLuLayer()
+trsel = SquaredErrorLayer()
+tasel = SquaredErrorLayer()
 
 #Set up second kernel layer
-cl.setKernels(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(16, 3, 3)))
+trcl.setKernels(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(16, 3, 3)))
+tacl.setKernels(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(16, 3, 3)))
 
-#layers = [il, cl, pl, fl, fcl, sal, cel]
-layers = [il, cl, pl, fl, fcl, lsl, sel]
+trainingLayers = [tril, trcl, trrll1, trpl, trfl, trfcl, trlsl, trsel]
+targetLayers = [tail, tacl, tarll1, tapl, tafl, tafcl, talsl, tasel]
 
 #Training model used for training and current q; used for action predictions
-trainingModel = Model(layers, 1)
+trainingModel = Model(trainingLayers, 1)
 
 #Target model used for future q and final model; more stable model to be updated
-targetModel = Model(layers, 1)
+targetModel = Model(trainingLayers, 1)
 
 '''DEBUG CODE --- TO DELETE
 Y = np.array([np.random.randint(8, size=4), np.random.randint(8, size=4)])
@@ -320,8 +331,9 @@ for episode in range(NUM_TRAINING_EPISODES):
     
     #Predict and save average Q
     qVals = trainingModel.predict(avgQBatch)
-    qValsMean = np.mean(qVals, axis=1)
-    qValsMean = np.sum(qValsMean) / qValsMean.size    
+    qVals = np.max(qVals, axis=1)
+    qValsMean = np.mean(qVals, axis=0)
+    qValsMean = np.sum(qValsMean) / qValsMean.size   
     
     #Log Results
     resultsLogFile = open('./TrainingScripts/Logs/episodeResults.csv', 'a')
