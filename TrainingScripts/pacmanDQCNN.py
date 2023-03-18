@@ -59,7 +59,7 @@ REPLAY_MEMORY_BATCH_SIZE = 100
 #Minimum number of replays to train
 MIN_REPLAY_SIZE = 500
 #Train every x steps
-NUM_STEPS_TILL_TRAIN = 10
+NUM_STEPS_TILL_TRAIN = 50
 #Update target model every x steps
 NUM_STEPS_TILL_END_EPISODE = 250
 
@@ -149,7 +149,9 @@ tapl = PoolingLayer(3, 3, 2, MaxPoolingCalc())
 trfl = FlatteningLayer()
 tafl = FlatteningLayer()
 trfcl = FullyConnectedLayer(320,4, AdamWeightUpdateCalc())
+trfcl2 = FullyConnectedLayer(160,4, AdamWeightUpdateCalc())
 tafcl = FullyConnectedLayer(320,4, AdamWeightUpdateCalc())
+tafcl2 = FullyConnectedLayer(160, 4, AdamWeightUpdateCalc())
 trlsl = LogisticSigmoidLayer()
 talsl = LogisticSigmoidLayer()
 sal = SoftmaxActivationLayer()
@@ -160,6 +162,8 @@ trrll1 = ReLuLayer()
 tarll1 = ReLuLayer()
 trrll2 = ReLuLayer()
 tarll2 = ReLuLayer()
+trrll3 = ReLuLayer()
+tarll3 = ReLuLayer()
 trsel = SquaredErrorLayer()
 tasel = SquaredErrorLayer()
 
@@ -167,14 +171,14 @@ tasel = SquaredErrorLayer()
 trcl.setKernels(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(16, 3, 3)))
 tacl.setKernels(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(16, 3, 3)))
 
-trainingLayers = [tril, trcl, trrll1, trpl, trfl, trfcl, trlsl, trsel]
-targetLayers = [tail, tacl, tarll1, tapl, tafl, tafcl, talsl, tasel]
+trainingLayers = [tril, trcl, trpl, trrll1, trfl, trfcl, trrll2, trsel]
+targetLayers = [tail, tacl, tapl, tarll1, tafl, tafcl, tarll2, tasel]
 
 #Training model used for training and current q; used for action predictions
-trainingModel = Model(trainingLayers, 1)
+trainingModel = Model(trainingLayers)
 
 #Target model used for future q and final model; more stable model to be updated
-targetModel = Model(trainingLayers, 1)
+targetModel = Model(targetLayers)
 
 '''DEBUG CODE --- TO DELETE
 Y = np.array([np.random.randint(8, size=4), np.random.randint(8, size=4)])
@@ -184,6 +188,7 @@ trainingModel.train(X, Y)'''
 
 #Make a prediction
 prediction = trainingModel.predict(X)
+#trainingModel.train(X,Y)
 maxValIdx = np.argmax(prediction)
 
 #Set action with predicted action
@@ -280,10 +285,14 @@ for episode in range(NUM_TRAINING_EPISODES):
         lastStepReward = 0
         if trackedAgent in decisionSteps:
             lastStepReward = decisionSteps[trackedAgent].reward
+            if lastStepReward != 0:
+                lastStepReward = 1 if lastStepReward >= 1 else -1
             episodeRewards += lastStepReward
 
         if trackedAgent in terminalSteps:
             lastStepReward = terminalSteps[trackedAgent].reward
+            if lastStepReward != 0:
+                lastStepReward = 1 if lastStepReward >= 1 else -1
             episodeRewards += lastStepReward
             done = True
 
@@ -302,22 +311,19 @@ for episode in range(NUM_TRAINING_EPISODES):
 
         observation = newObservation
 
+        #Update Training Model using Bellman Equation
+        if stepsToUpdateTargetModel % NUM_STEPS_TILL_TRAIN == 0 or toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE or done:
+            numAddedReplayMems = train(replayMemory, trainingModel, targetModel, numAddedReplayMems, done)
+            if numAddedReplayMems < toAddReplayMemIdx:
+                toAddReplayMemIdx = numAddedReplayMems
+
         #Update target model weights every X steps
-        if stepsToUpdateTargetModel >= NUM_STEPS_TILL_END_EPISODE or toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE or done:
+        if stepsToUpdateTargetModel >= NUM_STEPS_TILL_END_EPISODE:
+            #print("Copying trianing network weights to target network weights")
+            convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights = trainingModel.getWeights()
+            targetModel.setWeights(convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights)
+            stepsToUpdateTargetModel = 0
             break
-
-    #Update Training Model using Bellman Equation
-    # if stepsToUpdateTargetModel % NUM_STEPS_TILL_TRAIN == 0 or toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE or done:
-    numAddedReplayMems = train(replayMemory, trainingModel, targetModel, numAddedReplayMems, done)
-    if numAddedReplayMems < toAddReplayMemIdx:
-        toAddReplayMemIdx = numAddedReplayMems
-
-    #Update target model weights every X steps
-    if stepsToUpdateTargetModel >= NUM_STEPS_TILL_END_EPISODE:
-        # print("Copying training network weights to target network weights")
-        convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights = trainingModel.getWeights()
-        targetModel.setWeights(convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights)
-        stepsToUpdateTargetModel = 0
 
     #Update epsilon so we're less likely to take random action
     EPSILON = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-DECAY * episode)
