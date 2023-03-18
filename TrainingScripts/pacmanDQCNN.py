@@ -35,6 +35,9 @@ import pandas as pd
 #Whether to serialize weights with custom file path (since Rob's run directory is different than Ram's)
 USE_CUSTOM_FILE_PATH = False
 
+#Whether we should normalize rewards
+NORMALIZE_REWARDS = False
+
 #Constant board size params
 NUM_MAP_ROWS = 12
 NUM_MAP_COLS = 14
@@ -62,12 +65,12 @@ NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX = 250
 REPLAY_MEMORY_BATCH_SIZE = 100
 #Minimum number of replays to train
 MIN_REPLAY_SIZE = 500
-#Train every x steps
-NUM_STEPS_TILL_TRAIN = 125
 #Update target model every x steps
 NUM_STEPS_TILL_END_EPISODE = 250
+#Number of episodes until we train our target model
+NUM_EPISODES_TILL_TRAIN_TARGET = 2
 
-assert NUM_STEPS_TILL_TRAIN <= NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX, "Make sure you are setting num steps till training to be <= than replay batch size to delete"
+assert NUM_STEPS_TILL_END_EPISODE <= NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX, "Make sure you are setting num steps till training to be <= than replay batch size to delete"
 assert REPLAY_MEMORY_BATCH_SIZE <= MIN_REPLAY_SIZE, "Min Replay Size must be at least as big as replay batch size"
 
 #replayMemory = deque(maxlen=MAX_REPLAYMEMORY_SIZE)
@@ -118,13 +121,13 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, 
     Y = np.zeros((REPLAY_MEMORY_BATCH_SIZE, numPredictions))
     for idx, (observation, action, reward, newObservation, done) in enumerate(miniBatch):
         if not done:
-            maxFutureQ = reward + discountFactor * np.max(futureQsList[idx])
+            qTarget = reward + discountFactor * np.max(futureQsList[idx])
         else:
-            maxFutureQ = reward
+            qTarget = reward
 
         currentQs = currentQsList[idx]
         actionNumerical = action.discrete[0][0]
-        currentQs[actionNumerical] = (1 - learningRate) * currentQs[actionNumerical] + learningRate * maxFutureQ
+        currentQs[actionNumerical] = (1 - learningRate) * currentQs[actionNumerical] + learningRate * qTarget
 
         X[idx] = observation[0]
         Y[idx] = currentQs
@@ -348,13 +351,13 @@ for episode in range(NUM_TRAINING_EPISODES):
         lastStepReward = 0
         if trackedAgent in decisionSteps:
             lastStepReward = decisionSteps[trackedAgent].reward
-            if lastStepReward != 0:
+            if lastStepReward != 0 and NORMALIZE_REWARDS:
                 lastStepReward = 1 if lastStepReward >= 1 else -1
             episodeRewards += lastStepReward
 
         if trackedAgent in terminalSteps:
             lastStepReward = terminalSteps[trackedAgent].reward
-            if lastStepReward != 0:
+            if lastStepReward != 0 and NORMALIZE_REWARDS:
                 lastStepReward = 1 if lastStepReward >= 1 else -1
             episodeRewards += lastStepReward
             done = True
@@ -375,7 +378,7 @@ for episode in range(NUM_TRAINING_EPISODES):
         observation = newObservation
 
         #Update Training Model using Bellman Equation
-        if stepsToUpdateTargetModel % NUM_STEPS_TILL_TRAIN == 0 or toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE or done:
+        if stepsToUpdateTargetModel % NUM_STEPS_TILL_END_EPISODE == 0 or toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE or done:
             numAddedReplayMems = train(replayMemory, trainingModel, targetModel, numAddedReplayMems, done)
             if numAddedReplayMems < toAddReplayMemIdx:
                 toAddReplayMemIdx = numAddedReplayMems
@@ -384,10 +387,10 @@ for episode in range(NUM_TRAINING_EPISODES):
         if stepsToUpdateTargetModel >= NUM_STEPS_TILL_END_EPISODE:
             break
 
-    # Update the weights of the target model w/ the weights of the training model
-    # print("Copying trianing network weights to target network weights")
-    convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights = trainingModel.getWeights()
-    targetModel.setWeights(convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights)
+    # Update the weights of the target model w/ the weights of the training model ever X episodes
+    if (episode + 1) % NUM_EPISODES_TILL_TRAIN_TARGET == 0:
+        convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights = trainingModel.getWeights()
+        targetModel.setWeights(convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights)
     stepsToUpdateTargetModel = 0
 
     #Update epsilon so we're less likely to take random action
@@ -417,3 +420,6 @@ for episode in range(NUM_TRAINING_EPISODES):
 
 # plot results
 plot_metrics(logRoot, logFileName, trainingModel)
+
+#Close environemnt when done
+env.close()
