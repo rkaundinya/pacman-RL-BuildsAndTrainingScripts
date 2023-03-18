@@ -36,7 +36,7 @@ import pandas as pd
 USE_CUSTOM_FILE_PATH = False
 
 #Whether we should normalize rewards
-NORMALIZE_REWARDS = False
+NORMALIZE_REWARDS = True
 
 #Constant board size params
 NUM_MAP_ROWS = 12
@@ -53,7 +53,7 @@ MIN_EPSILON = 0.01
 #Epsilon greedy training strategy - begin at one (completely random)
 EPSILON = 1
 #Amount to scale epsilon decay by after every episode
-DECAY = 0.01
+DECAY = 0.03
 #Number of training episodes
 NUM_TRAINING_EPISODES = 100
 NUM_TESTING_EPISODES = 100
