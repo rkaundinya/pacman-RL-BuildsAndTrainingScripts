@@ -31,7 +31,7 @@ NUM_MAP_ROWS = 12
 NUM_MAP_COLS = 14
 
 #Weights To Load Filename
-toLoad =  "NPY_FILES/2023-03-18-12-54-51_FC_1_CONV_1/2023-03-18-15-44-20_FC_1_CONV_1.pny"
+toLoad =  "2023-03-18-18-18-17_FC_1_CONV_1/2023-03-18-18-56-55_FC_1_CONV_1.npy"
 
 X = np.array([np.random.randint(8, size=168).reshape((12,14)), np.random.randint(8, size=168).reshape((12,14))])
 
@@ -69,7 +69,7 @@ trcl.setKernels(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(16, 3,
 testModelLayers = [tril, trcl, trpl, trrll1, trfl, trfcl, trrll2, trsel]
 
 testModel = Model(testModelLayers)
-testModel.serialize(toLoad)
+testModel.load(toLoad)
 
 #Create channel to specify run speed
 channel = EngineConfigurationChannel()
@@ -78,7 +78,7 @@ channel = EngineConfigurationChannel()
 env = UE(file_name='../MiniGameMap/Pacman', seed=1, side_channels=[channel])
 
 #Set environment run timescale
-channel.set_configuration_parameters(time_scale= 5)
+channel.set_configuration_parameters(time_scale= 1)
 env.reset()
 env.reset()
 
@@ -91,7 +91,6 @@ spec = env.behavior_specs[behaviorName]
 #on type of agent action and other action info
 agentActionSpec = spec.action_spec
 
-stepsToUpdateTargetModel = 0
 episodeRewards = 0
 trackedAgent = -1
 done = False
@@ -107,8 +106,6 @@ decisionStepsObs = decisionSteps[trackedAgent].obs
 observation = np.array([np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))])
 
 while not done:
-    stepsToUpdateTargetModel += 1
-
     if trackedAgent == -1 and len(decisionSteps) >= 1:
         trackedAgent = decisionSteps.agent_id[0]
 
