@@ -37,7 +37,7 @@ class FullyConnectedLayer(Layer):
     #Input: None
     #Output: The sizeIn x sizeOut weight matrix
     def getWeights(self):
-        return self.weights
+        return self.weights.copy()
 
     #Input: The sizeIn x sizeOut weight matrix
     #Output: None
@@ -47,7 +47,7 @@ class FullyConnectedLayer(Layer):
     #Input: None
     #Output: The 1 x sizeOut bias vector
     def getBiases(self):
-        return self.biases
+        return self.biases.copy()
 
     #Input: The 1 x sizeOut bias vector
     #Output: None

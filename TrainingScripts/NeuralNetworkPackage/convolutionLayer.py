@@ -33,7 +33,7 @@ class ConvolutionalLayer(Layer):
         self.kernels = newKernels
 
     def getKernels(self):
-        return self.kernels
+        return self.kernels.copy()
 
     #Input: dataIn, N x H x W matrix
     #Output: N x (H - M + 1) x (W - M + 1) matrix where M is kernelDim
@@ -72,7 +72,7 @@ class ConvolutionalLayer(Layer):
                 numColsToIterate = matrix.shape[1] - gradMatrix.shape[1] + 1
                 dJdK = mhl.crossCorrelate(matrix, gradMatrix, numRowsToIterate, numColsToIterate)
                 kernelMatrix -= eta * dJdK
-        
+
     #Output: result, returns a tensor with each kernel matrix transposed
     def gradient(self):
         result = np.zeros((len(self.kernels)), dtype=np.ndarray)
