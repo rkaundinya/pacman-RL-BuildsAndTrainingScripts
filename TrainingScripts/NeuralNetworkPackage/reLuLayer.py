@@ -11,21 +11,19 @@ class ReLuLayer(Layer):
     #Output: An NxK matrix
     def forward(self, dataIn):
         self.setPrevIn(dataIn)
-        output = np.clip(dataIn, 0, None)
+        output = np.zeros_like(dataIn)
+        for i, j  in enumerate(dataIn):
+            for l,m in enumerate(dataIn[i]):
+                output[i][l] = np.clip(dataIn[i][l], 0, None)
         self.setPrevOut(output)
         return output
 
     #Input: None
     #Output: NxD identity matrix (after going thru relu, all prev output will have min value 0)
+    #This assumes a PrevIn input with a min value of 0
     def gradient(self):
         prevIn = self.getPrevIn()
-        condensedOut = np.ones((prevIn.shape[0], prevIn.shape[1]))
-        
-        for rowCount, row in enumerate(condensedOut):
-            for elCount, element in enumerate(row):
-                condensedOut[rowCount][elCount] = 1 if prevIn[rowCount][elCount]  >= 0 else 0
-
-        return condensedOut
+        return prevIn
 
     #Input: NxK matrix
     #Output: NxK matrix
