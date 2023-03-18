@@ -29,7 +29,7 @@ from mlagents_envs.base_env import (
 import numpy as np
 
 #Whether to serialize weights with custom file path (since Rob's run directory is different than Ram's)
-USE_CUSTOM_FILE_PATH = False
+USE_CUSTOM_FILE_PATH = True
 
 #Constant board size params
 NUM_MAP_ROWS = 12
@@ -198,7 +198,7 @@ predictedAction = ActionTuple(np.zeros((1,0)), np.array([[maxValIdx]]))
 channel = EngineConfigurationChannel()
 
 #Open pacman environment
-env = UE(file_name='./MiniGameMap/Pacman', seed=1, side_channels=[channel])
+env = UE(file_name='../MiniGameMap/Pacman', seed=1, side_channels=[channel])
 
 #Set environment run timescale
 channel.set_configuration_parameters(time_scale= 5.0)
@@ -227,7 +227,7 @@ decisionStepsObs = decisionSteps[0].obs
 observation = np.array([np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))])
 
 #Open a file to write episode rewards to for logging
-resultsLogFile = open('./TrainingScripts/Logs/episodeResults.csv', 'w')
+resultsLogFile = open('./Logs/episodeResults.csv', 'w')
 print("Episode,Epsilon,Rewards,QValMean", file=resultsLogFile)
 resultsLogFile.close()
 
@@ -342,7 +342,7 @@ for episode in range(NUM_TRAINING_EPISODES):
     qValsMean = np.sum(qValsMean) / qValsMean.size   
     
     #Log Results
-    resultsLogFile = open('./TrainingScripts/Logs/episodeResults.csv', 'a')
+    resultsLogFile = open('./Logs/episodeResults.csv', 'a')
     print(str(episode) + "," + str(EPSILON) + "," + str(episodeRewards) + "," + str(qValsMean), file=resultsLogFile)
     if (USE_CUSTOM_FILE_PATH):
         trainingModel.serialize("NPY_FILES/")

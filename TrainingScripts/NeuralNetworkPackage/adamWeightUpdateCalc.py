@@ -1,5 +1,5 @@
-from weightUpdateCalcBase import WeightUpdateCalc, CalcData
-from fullyConnectedLayer import FullyConnectedLayer
+from . weightUpdateCalcBase import WeightUpdateCalc, CalcData
+from . fullyConnectedLayer import FullyConnectedLayer
 import numpy as np
 import math
 
