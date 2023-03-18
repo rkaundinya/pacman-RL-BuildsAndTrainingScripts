@@ -177,6 +177,7 @@ targetLayers = [tail, tacl, tapl, tarll1, tafl, tafcl, tarll2, tasel]
 #Training model used for training and current q; used for action predictions
 trainingModel = Model(trainingLayers)
 
+
 #Target model used for future q and final model; more stable model to be updated
 targetModel = Model(targetLayers)
 
