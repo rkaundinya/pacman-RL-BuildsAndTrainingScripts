@@ -33,7 +33,7 @@ class ConvolutionalLayer(Layer):
         self.kernels = newKernels
 
     def getKernels(self):
-        return self.kernels.copy()
+        return self.kernels.copy() 
 
     #Input: dataIn, N x H x W matrix
     #Output: N x (H - M + 1) x (W - M + 1) matrix where M is kernelDim

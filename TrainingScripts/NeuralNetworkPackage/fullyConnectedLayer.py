@@ -47,7 +47,7 @@ class FullyConnectedLayer(Layer):
     #Input: None
     #Output: The 1 x sizeOut bias vector
     def getBiases(self):
-        return self.biases.copy()
+        return self.biases.copy() 
 
     #Input: The 1 x sizeOut bias vector
     #Output: None
