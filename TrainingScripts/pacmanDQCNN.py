@@ -77,10 +77,12 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, 
     learningRate = 0.7
     discountFactor = 0.618
 
+    # check to see if the training data has enough data points
     numAddedReplayMems = inNumAddedReplayMems
     if (numAddedReplayMems < MIN_REPLAY_SIZE):
         return numAddedReplayMems
 
+    # shuffle the training data
     miniBatch = inReplayMemory[:numAddedReplayMems]
     np.random.shuffle(miniBatch)
     inReplayMemory = miniBatch
@@ -88,18 +90,23 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, 
 
     #Get the observations from minibatch
     currentStates = np.zeros((len(miniBatch), miniBatch[0][0].shape[1], miniBatch[0][0].shape[2]))
+
     #Populate currentStates with observations
     for idx, transition in enumerate(miniBatch):
         currentStates[idx] = transition[0]
 
+    # produce y label for the final model
     currentQsList = inTrainingModel.predict(currentStates)
-    newCurrentStates = np.zeros((len(miniBatch), miniBatch[0][3].shape[1], miniBatch[0][3].shape[2]))
+
     #Populate newCurrentStates with subsequent observations
+    newCurrentStates = np.zeros((len(miniBatch), miniBatch[0][3].shape[1], miniBatch[0][3].shape[2]))
     for idx, transition in enumerate(miniBatch):
         newCurrentStates[idx] = transition[3]
 
+    # find best actions to take
     futureQsList = inTargetModel.predict(newCurrentStates)
 
+    # assemble the x and y data sets
     obsNumRows = miniBatch[0][0].shape[1]
     obsNumCols = miniBatch[0][0].shape[2]
     numPredictions = currentQsList[0].shape[0]
@@ -118,8 +125,10 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, 
         X[idx] = observation[0]
         Y[idx] = currentQs
 
+    # fit the training model
     inTrainingModel.train(X, Y)
 
+    # update replay memory index
     if (numAddedReplayMems >= MAX_REPLAYMEMORY_SIZE):
         inReplayMemory[numAddedReplayMems-NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX:numAddedReplayMems] = None
             
