@@ -12,6 +12,7 @@ class Model:
         self.layers = layers
         self.eta = eta
         self.folder = ''
+        self.loss_arr = []
 
         self.fcLayers = []
         self.convLayers = []
@@ -42,6 +43,7 @@ class Model:
 
         if (isinstance(self.layers[-1], ObjectiveLayer)):
             loss = self.layers[-1].eval(y, prediction)
+            self.loss_arr.append(loss)
 
         gradient = self.layers[-1].gradient(y, prediction)
 

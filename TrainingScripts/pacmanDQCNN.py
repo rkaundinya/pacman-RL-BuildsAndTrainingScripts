@@ -26,7 +26,11 @@ from mlagents_envs.base_env import (
     BehaviorMapping,
 )
 
+from datetime import datetime
+import matplotlib.pyplot as plt
 import numpy as np
+import os
+import pandas as pd
 
 #Whether to serialize weights with custom file path (since Rob's run directory is different than Ram's)
 USE_CUSTOM_FILE_PATH = False
@@ -48,7 +52,7 @@ EPSILON = 1
 #Amount to scale epsilon decay by after every episode
 DECAY = 0.01
 #Number of training episodes
-NUM_TRAINING_EPISODES = 300
+NUM_TRAINING_EPISODES = 100
 NUM_TESTING_EPISODES = 100
 #Max number of stored replay memories
 MAX_REPLAYMEMORY_SIZE = 1000
@@ -59,7 +63,7 @@ REPLAY_MEMORY_BATCH_SIZE = 100
 #Minimum number of replays to train
 MIN_REPLAY_SIZE = 500
 #Train every x steps
-NUM_STEPS_TILL_TRAIN = 50
+NUM_STEPS_TILL_TRAIN = 125
 #Update target model every x steps
 NUM_STEPS_TILL_END_EPISODE = 250
 
@@ -73,7 +77,7 @@ numAddedReplayMems = 0
 
 #Note - 0,1,2,3 action indices correspond to up, down, right, left respectively
 
-def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, inDone):
+def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, isDone):
     learningRate = 0.7
     discountFactor = 0.618
 
@@ -134,6 +138,61 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, 
             
         numAddedReplayMems -= NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX
     return numAddedReplayMems
+
+
+def plot_metrics(log_root, log_file, model):
+    log_df = pd.read_csv(f'{log_root}/{log_file}')
+
+    # figure out what kind of loss function was used for the model
+    if isinstance(model.layers[-1], SquaredErrorLayer):
+        loss_str = 'Squared Error'
+    elif isinstance(model.layers[-1], CrossEntropyLayer):
+        loss_str = 'Cross Entropy'
+    else:
+        loss_str = ''
+    
+    # plot mean q value vs. episode Episode,Epsilon,Rewards,QValMean
+    plt.figure(0)
+    plt.plot(log_df.Episode, log_df.QValMean)
+    plt.title('Mean Q vs. Episode')
+    plt.xlabel('Episodes')
+    plt.ylabel('Mean Q')
+    plt.savefig(f'{log_root}/meanQ_vs_episode.png')
+
+    # plot loss vs. epoch for each episode iteration on one graph
+    plt.figure(1)
+    epochs = np.arange(1, len(model.loss_arr)+1)
+    plt.plot(epochs, model.loss_arr)
+    plt.title('Loss vs. Epoch')
+    plt.xlabel('Epochs')
+    plt.ylabel(f'Loss ({loss_str})')
+    plt.savefig(f'{log_root}/loss_vs_epoch.png')
+
+    # plot reward vs. episode
+    plt.figure(2)
+    plt.plot(log_df.Episode, log_df.Rewards)
+    plt.title('Reward vs. Episode')
+    plt.xlabel('Episodes')
+    plt.ylabel('Reward')
+    plt.savefig(f'{log_root}/reward_vs_episode.png')
+
+    # plot reward vs. epsilon
+    plt.figure(3)
+    plt.plot(log_df.Epsilon, log_df.Rewards)
+    plt.title('Rewards vs. Epsilon')
+    plt.xlabel('Epsilon')
+    plt.ylabel(f'Rewards')
+    plt.savefig(f'{log_root}/loss_vs_epsilon.png')
+
+    # plot epsilon vs. episode
+    plt.figure(4)
+    plt.plot(log_df.Episode, log_df.Epsilon)
+    plt.title('Epsilon vs. Episode')
+    plt.xlabel('Episodes')
+    plt.ylabel('Epsilon')
+    plt.savefig(f'{log_root}/epsilon_vs_episode.png')
+
+    print(f"Plots saved here: {log_root}")
 
 #Create empty random sized X array
 X = np.array([np.random.randint(8, size=168).reshape((12,14)), np.random.randint(8, size=168).reshape((12,14))])
@@ -201,18 +260,18 @@ channel = EngineConfigurationChannel()
 #Open pacman environment
 env = UE(file_name='./MiniGameMap/Pacman', seed=1, side_channels=[channel])
 
-#Set environment run timescale
+#Set game environment's run speed
 channel.set_configuration_parameters(time_scale= 5.0)
 
 env.reset()
 
 #Get the name of the behavior we're using
 behaviorName = list(env.behavior_specs)[0]
+
 #Get the behavior spec which contains observation data
 spec = env.behavior_specs[behaviorName]
 
-#spec.action_spec is a ActionSpec tuple containing info 
-#on type of agent action and other action info
+#spec.action_spec is a ActionSpec tuple containing info on type of agent action and other action info
 agentActionSpec = spec.action_spec
 
 #Set action to predicted action
@@ -228,7 +287,10 @@ decisionStepsObs = decisionSteps[0].obs
 observation = np.array([np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))])
 
 #Open a file to write episode rewards to for logging
-resultsLogFile = open('./TrainingScripts/Logs/episodeResults.csv', 'w')
+logRoot = f'./TrainingScripts/Logs/{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}'
+os.makedirs(logRoot)
+logFileName = 'episodeResults.csv'
+resultsLogFile = open(f'{logRoot}/{logFileName}', 'w')
 print("Episode,Epsilon,Rewards,QValMean", file=resultsLogFile)
 resultsLogFile.close()
 
@@ -320,11 +382,13 @@ for episode in range(NUM_TRAINING_EPISODES):
 
         #Update target model weights every X steps
         if stepsToUpdateTargetModel >= NUM_STEPS_TILL_END_EPISODE:
-            #print("Copying trianing network weights to target network weights")
-            convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights = trainingModel.getWeights()
-            targetModel.setWeights(convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights)
-            stepsToUpdateTargetModel = 0
             break
+
+    # Update the weights of the target model w/ the weights of the training model
+    # print("Copying trianing network weights to target network weights")
+    convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights = trainingModel.getWeights()
+    targetModel.setWeights(convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights)
+    stepsToUpdateTargetModel = 0
 
     #Update epsilon so we're less likely to take random action
     EPSILON = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-DECAY * episode)
@@ -343,10 +407,13 @@ for episode in range(NUM_TRAINING_EPISODES):
     qValsMean = np.sum(qValsMean) / qValsMean.size   
     
     #Log Results
-    resultsLogFile = open('./TrainingScripts/Logs/episodeResults.csv', 'a')
+    resultsLogFile = open(f'{logRoot}/{logFileName}', 'a')
     print(str(episode) + "," + str(EPSILON) + "," + str(episodeRewards) + "," + str(qValsMean), file=resultsLogFile)
     if (USE_CUSTOM_FILE_PATH):
         trainingModel.serialize("NPY_FILES/")
     else:
         trainingModel.serialize()
     resultsLogFile.close()
+
+# plot results
+plot_metrics(logRoot, logFileName, trainingModel)
