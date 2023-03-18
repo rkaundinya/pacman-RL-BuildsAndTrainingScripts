@@ -23,9 +23,28 @@ class ReLuLayer(Layer):
     #This assumes a PrevIn input with a min value of 0
     def gradient(self):
         prevIn = self.getPrevIn()
+        elementsAreNPArrays = False
+        if (type(prevIn[0][0]) == np.ndarray):
+            elementsAreNPArrays = True
+
+        if not elementsAreNPArrays:
+            for idx1,j in enumerate(prevIn):
+                for idx2,m in enumerate(prevIn[idx1]):
+                    prevIn[idx1][idx2] = 1 if prevIn[idx1][idx2] >= 0 else 0
+        #Assuming 4 dimensional prevIn
+        else:
+            for tensor in prevIn:
+                for matrix in tensor:
+                    for row in matrix:
+                        for element in row:
+                            element = 1 if element >= 0 else 0
+
         return prevIn
 
     #Input: NxK matrix
     #Output: NxK matrix
     def backward(self, gradient):
         return np.multiply(gradient, self.gradient())
+    
+test = np.array([1,2])
+print(type(test) == np.ndarray)

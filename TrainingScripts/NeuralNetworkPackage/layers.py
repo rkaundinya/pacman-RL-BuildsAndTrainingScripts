@@ -12,10 +12,10 @@ class Layer(ABC):
         self.__prevOut = out
 
     def getPrevIn(self):
-        return self.__prevIn
+        return self.__prevIn.copy()
 
     def getPrevOut(self):
-        return self.__prevOut
+        return self.__prevOut.copy()
 
     @abstractmethod
     def forward(self, dataIn):
