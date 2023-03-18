@@ -5,6 +5,7 @@ from NeuralNetworkPackage.poolingLayer import PoolingLayer
 from NeuralNetworkPackage.maxPoolingCalc import MaxPoolingCalc
 from NeuralNetworkPackage.fullyConnectedLayer import FullyConnectedLayer
 from NeuralNetworkPackage.reLuLayer import ReLuLayer
+from NeuralNetworkPackage.logisticSigmoidLayer import LogisticSigmoidLayer
 from NeuralNetworkPackage.softmaxActivationLayer import SoftmaxActivationLayer
 from NeuralNetworkPackage.crossEntropyLayer import CrossEntropyLayer
 from NeuralNetworkPackage.squaredErrorLayer import SquaredErrorLayer
@@ -54,13 +55,13 @@ MAX_REPLAYMEMORY_SIZE = 1000
 #Replay memory to delete when maxed
 NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX = 250
 #Replay memory batch size for training
-REPLAY_MEMORY_BATCH_SIZE = 50
+REPLAY_MEMORY_BATCH_SIZE = 100
 #Minimum number of replays to train
-MIN_REPLAY_SIZE = 100
+MIN_REPLAY_SIZE = 500
 #Train every x steps
-NUM_STEPS_TILL_TRAIN = 100
+NUM_STEPS_TILL_TRAIN = 10
 #Update target model every x steps
-NUM_STEPS_TILL_UPDATE_TARGET = 250
+NUM_STEPS_TILL_END_EPISODE = 250
 
 assert NUM_STEPS_TILL_TRAIN <= NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX, "Make sure you are setting num steps till training to be <= than replay batch size to delete"
 assert REPLAY_MEMORY_BATCH_SIZE <= MIN_REPLAY_SIZE, "Min Replay Size must be at least as big as replay batch size"
@@ -134,7 +135,8 @@ cl = ConvolutionalLayer(8)
 mpc = MaxPoolingCalc()
 pl = PoolingLayer(3, 3, 2, mpc)
 fl = FlatteningLayer()
-fcl = FullyConnectedLayer(26,4)
+fcl = FullyConnectedLayer(320,4)
+lsl = LogisticSigmoidLayer()
 sal = SoftmaxActivationLayer()
 cel = CrossEntropyLayer()
 
@@ -143,14 +145,15 @@ rll = ReLuLayer()
 sel = SquaredErrorLayer()
 
 #Set up second kernel layer
-cl.addKernel(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(4, 4)))
+cl.setKernels(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(16, 3, 3)))
 
 #layers = [il, cl, pl, fl, fcl, sal, cel]
-layers = [il, cl, pl, fl, fcl, rll, sel]
+layers = [il, cl, pl, fl, fcl, lsl, sel]
 
-#Training model used for training and current q
+#Training model used for training and current q; used for action predictions
 trainingModel = Model(layers, 1)
-#Target model used for future q and final model
+
+#Target model used for future q and final model; more stable model to be updated
 targetModel = Model(layers, 1)
 
 '''DEBUG CODE --- TO DELETE
@@ -170,7 +173,7 @@ predictedAction = ActionTuple(np.zeros((1,0)), np.array([[maxValIdx]]))
 channel = EngineConfigurationChannel()
 
 #Open pacman environment
-env = UE(file_name='../MiniGameMap/Pacman', seed=1, side_channels=[channel])
+env = UE(file_name='./MiniGameMap/Pacman', seed=1, side_channels=[channel])
 
 #Set environment run timescale
 channel.set_configuration_parameters(time_scale= 5.0)
@@ -199,8 +202,9 @@ decisionStepsObs = decisionSteps[0].obs
 observation = np.array([np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))])
 
 #Open a file to write episode rewards to for logging
-rewardsLogFile = open('./Logs/episodeRewards.txt', 'w')
-rewardsLogFile.close()
+resultsLogFile = open('./TrainingScripts/Logs/episodeResults.csv', 'w')
+print("Episode,Epsilon,Rewards,QValMean", file=resultsLogFile)
+resultsLogFile.close()
 
 #Setting some loop params
 trackedAgent = -1
@@ -211,9 +215,26 @@ trackedAgent = decisionSteps.agent_id[0]
 stepsToUpdateTargetModel = 0
 
 for episode in range(NUM_TRAINING_EPISODES):
+    if episode % 10 == 0:
+        print(f'Training Episode: {episode}/{NUM_TRAINING_EPISODES}')
     episodeRewards = 0
     trackedAgent = -1
     done = False
+
+    env.reset()
+
+    #Gets DecisionSteps object and TerminalSteps object
+    decisionSteps, terminalSteps = env.get_steps(behaviorName)
+
+    if len(decisionSteps) >= 1:
+        trackedAgent = decisionSteps.agent_id[0]
+    
+    assert trackedAgent != -1, "Error - no agent id set --- this shouldn't happen"
+
+    #Get the map state representation and reorder to grid size for CNN
+    decisionStepsObs = decisionSteps[trackedAgent].obs
+    observation = np.array([np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))])
+
     while not done:
         stepsToUpdateTargetModel += 1
 
@@ -247,41 +268,57 @@ for episode in range(NUM_TRAINING_EPISODES):
             done = True
 
         #Skip the training stuff every x episodes so we can just watch the model run normally
-        if (episode == 0) or (not episode % 5 == 0):
-            if not done:
-                decisionStepsObs = decisionSteps[trackedAgent].obs
-                newObservation = np.array([np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))])
-            else:
-                newObservation = observation
+        #if (episode == 0) or (not episode % 5 == 0):
+        if not done:
+            decisionStepsObs = decisionSteps[trackedAgent].obs
+            newObservation = np.array([np.reshape(decisionStepsObs, (NUM_MAP_ROWS, NUM_MAP_COLS))])
+        else:
+            newObservation = observation
 
-            replayMemory[toAddReplayMemIdx] = np.array([observation, action, lastStepReward, newObservation, done])
+        replayMemory[toAddReplayMemIdx] = np.array([observation, action, lastStepReward, newObservation, done])
 
-            toAddReplayMemIdx += 1
-            numAddedReplayMems += 1
+        toAddReplayMemIdx += 1
+        numAddedReplayMems += 1
 
-            observation = newObservation
+        observation = newObservation
 
-            #Update Training Model using Bellman Equation
-            if stepsToUpdateTargetModel % NUM_STEPS_TILL_TRAIN == 0 or toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE or done:
-                numAddedReplayMems = train(replayMemory, trainingModel, targetModel, numAddedReplayMems, done)
-                if numAddedReplayMems < toAddReplayMemIdx:
-                    toAddReplayMemIdx = numAddedReplayMems
+        #Update target model weights every X steps
+        if stepsToUpdateTargetModel >= NUM_STEPS_TILL_END_EPISODE or toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE or done:
+            break
 
-            #Update target model weights every X steps
-            if stepsToUpdateTargetModel >= NUM_STEPS_TILL_UPDATE_TARGET:
-                print("Copying trianing network weights to target network weights")
-                convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights = trainingModel.getWeights()
-                targetModel.setWeights(convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights)
-                stepsToUpdateTargetModel = 0
+    #Update Training Model using Bellman Equation
+    # if stepsToUpdateTargetModel % NUM_STEPS_TILL_TRAIN == 0 or toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE or done:
+    numAddedReplayMems = train(replayMemory, trainingModel, targetModel, numAddedReplayMems, done)
+    if numAddedReplayMems < toAddReplayMemIdx:
+        toAddReplayMemIdx = numAddedReplayMems
+
+    #Update target model weights every X steps
+    if stepsToUpdateTargetModel >= NUM_STEPS_TILL_END_EPISODE:
+        # print("Copying training network weights to target network weights")
+        convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights = trainingModel.getWeights()
+        targetModel.setWeights(convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights)
+        stepsToUpdateTargetModel = 0
 
     #Update epsilon so we're less likely to take random action
     EPSILON = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-DECAY * episode)
     
-    #Log rewards
-    rewardsLogFile = open('./Logs/episodeRewards.txt', 'a')
-    print("Total rewards for episode " + str(episode) + " with epsilon " + str(EPSILON) + ": " + str(episodeRewards), file=rewardsLogFile)    
+    #Get random batch for logging average q
+    avgQBatch = np.zeros((REPLAY_MEMORY_BATCH_SIZE, replayMemory[0][0].shape[1], replayMemory[0][0].shape[2]))    
+    for idx, memory in enumerate(replayMemory):
+        if idx >= REPLAY_MEMORY_BATCH_SIZE:
+            break        
+        avgQBatch[idx] = memory[0]
+    
+    #Predict and save average Q
+    qVals = trainingModel.predict(avgQBatch)
+    qValsMean = np.mean(qVals, axis=1)
+    qValsMean = np.sum(qValsMean) / qValsMean.size    
+    
+    #Log Results
+    resultsLogFile = open('./TrainingScripts/Logs/episodeResults.csv', 'a')
+    print(str(episode) + "," + str(EPSILON) + "," + str(episodeRewards) + "," + str(qValsMean), file=resultsLogFile)
     if (USE_CUSTOM_FILE_PATH):
         trainingModel.serialize("NPY_FILES/")
     else:
         trainingModel.serialize()
-    rewardsLogFile.close()
+    resultsLogFile.close()

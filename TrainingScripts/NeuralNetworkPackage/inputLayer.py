@@ -22,6 +22,7 @@ class InputLayer(Layer):
             self.setPrevOut(zScoredData)
             return zScoredData
         else:
+            dataIn = dataIn / np.max(dataIn)
             self.setPrevOut(dataIn)
             return dataIn
 
