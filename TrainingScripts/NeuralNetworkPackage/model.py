@@ -113,11 +113,11 @@ class Model:
             
         return True
 
-
-
     def getWeights(self):
         numConvLayers = len(self.convLayers)
         numKernelsPerObs = 0
+        convLayersWeights = None
+        fcLayersWeights = None
         if numConvLayers > 0:
             numKernelsPerObs = len(self.convLayers[0].getKernels())
             convLayersWeights = [None] * numConvLayers * numKernelsPerObs
