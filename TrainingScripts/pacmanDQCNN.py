@@ -36,7 +36,7 @@ import pandas as pd
 USE_CUSTOM_FILE_PATH = False
 
 #Whether we should normalize rewards
-NORMALIZE_REWARDS = True
+NORMALIZE_REWARDS = False
 
 #Should we use a living reward
 USE_LIVING_REWARD = False
@@ -59,9 +59,9 @@ MIN_EPSILON = 0.01
 #Epsilon greedy training strategy - begin at one (completely random)
 EPSILON = 1
 #Amount to scale epsilon decay by after every episode
-DECAY = 0.03
+DECAY = 0.01
 #Number of training episodes
-NUM_TRAINING_EPISODES = 100
+NUM_TRAINING_EPISODES = 300
 NUM_TESTING_EPISODES = 100
 #Max number of stored replay memories
 MAX_REPLAYMEMORY_SIZE = 1000
@@ -72,11 +72,14 @@ REPLAY_MEMORY_BATCH_SIZE = 250
 #Minimum number of replays to train
 MIN_REPLAY_SIZE = 500
 #Number of steps till training training model
-NUM_STEPS_TILL_TRAIN = 1250
+NUM_STEPS_TILL_TRAIN = 125
 #End episode after this many steps
-NUM_STEPS_TILL_END_EPISODE = 2500
+NUM_STEPS_TILL_END_EPISODE = 250
 #Number of episodes until we train our target model
-NUM_EPISODES_TILL_TRAIN_TARGET = 2
+NUM_EPISODES_TILL_TRAIN_TARGET = 1
+
+#Flag to indicate how we should reshape observation for NN input
+FIRST_LAYER_FULLY_CONNECTED = True
 
 #assert NUM_STEPS_TILL_END_EPISODE <= NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX, "Make sure you are setting num steps till training to be <= than replay batch size to delete"
 assert REPLAY_MEMORY_BATCH_SIZE <= MIN_REPLAY_SIZE, "Min Replay Size must be at least as big as replay batch size"
@@ -103,21 +106,29 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, 
     inReplayMemory = miniBatch
     miniBatch = miniBatch[:REPLAY_MEMORY_BATCH_SIZE]
 
-    #Get the observations from minibatch
-    currentStates = np.zeros((len(miniBatch), miniBatch[0][0].shape[1], miniBatch[0][0].shape[2]))
-
-    #Populate currentStates with observations
-    for idx, transition in enumerate(miniBatch):
-        currentStates[idx] = transition[0]
+    #Get the observations from minibatch and populate current states
+    if FIRST_LAYER_FULLY_CONNECTED:
+        currentStates = np.zeros((len(miniBatch), NUM_MAP_COLS * NUM_MAP_ROWS))
+        for idx, transition in enumerate(miniBatch):
+            currentStates[idx] = np.reshape(transition[0][0], NUM_MAP_ROWS * NUM_MAP_COLS)
+    else:
+        currentStates = np.zeros((len(miniBatch), miniBatch[0][0].shape[1], miniBatch[0][0].shape[2]))
+        for idx, transition in enumerate(miniBatch):
+            currentStates[idx] = transition[0]
 
     # produce y label for the final model
     currentQsList = inTrainingModel.predict(currentStates)
 
     #Populate newCurrentStates with subsequent observations
-    newCurrentStates = np.zeros((len(miniBatch), miniBatch[0][3].shape[1], miniBatch[0][3].shape[2]))
-    for idx, transition in enumerate(miniBatch):
-        newCurrentStates[idx] = transition[3]
-
+    if FIRST_LAYER_FULLY_CONNECTED:
+        newCurrentStates = np.zeros((len(miniBatch), NUM_MAP_ROWS * NUM_MAP_COLS))
+        for idx, transition in enumerate(miniBatch):
+            newCurrentStates[idx] = np.reshape(transition[3][0], NUM_MAP_COLS * NUM_MAP_ROWS) 
+    else:
+        newCurrentStates = np.zeros((len(miniBatch), miniBatch[0][3].shape[1], miniBatch[0][3].shape[2]))
+        for idx, transition in enumerate(miniBatch):
+            newCurrentStates[idx] = transition[3]
+    
     # find best actions to take
     futureQsList = inTargetModel.predict(newCurrentStates)
 
@@ -125,7 +136,11 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, 
     obsNumRows = miniBatch[0][0].shape[1]
     obsNumCols = miniBatch[0][0].shape[2]
     numPredictions = currentQsList[0].shape[0]
-    X = np.zeros((REPLAY_MEMORY_BATCH_SIZE, obsNumRows, obsNumCols))
+    if FIRST_LAYER_FULLY_CONNECTED:
+        X = np.zeros((REPLAY_MEMORY_BATCH_SIZE, NUM_MAP_COLS * NUM_MAP_ROWS))
+    else:
+        X = np.zeros((REPLAY_MEMORY_BATCH_SIZE, obsNumRows, obsNumCols))
+    
     Y = np.zeros((REPLAY_MEMORY_BATCH_SIZE, numPredictions))
     for idx, (observation, action, reward, newObservation, done) in enumerate(miniBatch):
         if not done:
@@ -137,7 +152,10 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, 
         actionNumerical = action.discrete[0][0]
         currentQs[actionNumerical] = (1 - learningRate) * currentQs[actionNumerical] + learningRate * qTarget
 
-        X[idx] = observation[0]
+        if FIRST_LAYER_FULLY_CONNECTED:
+            X[idx] = np.reshape(observation[0], NUM_MAP_ROWS * NUM_MAP_COLS)
+        else:
+            X[idx] = observation[0]
         Y[idx] = currentQs
 
     # fit the training model
@@ -219,10 +237,12 @@ trpl = PoolingLayer(3, 3, 2, mpc)
 tapl = PoolingLayer(3, 3, 2, MaxPoolingCalc())
 trfl = FlatteningLayer()
 tafl = FlatteningLayer()
-trfcl = FullyConnectedLayer(320,4, AdamWeightUpdateCalc())
-trfcl2 = FullyConnectedLayer(160,4, AdamWeightUpdateCalc())
-tafcl = FullyConnectedLayer(320,4, AdamWeightUpdateCalc())
-tafcl2 = FullyConnectedLayer(160, 4, AdamWeightUpdateCalc())
+trfcl = FullyConnectedLayer(168,84, AdamWeightUpdateCalc())
+trfcl2 = FullyConnectedLayer(84,42, AdamWeightUpdateCalc())
+trfcl3 = FullyConnectedLayer(42, 4, AdamWeightUpdateCalc())
+tafcl = FullyConnectedLayer(168, 84, AdamWeightUpdateCalc())
+tafcl2 = FullyConnectedLayer(84, 42, AdamWeightUpdateCalc())
+tafcl3 = FullyConnectedLayer(42, 4, AdamWeightUpdateCalc())
 trlsl = LogisticSigmoidLayer()
 talsl = LogisticSigmoidLayer()
 sal = SoftmaxActivationLayer()
@@ -242,28 +262,14 @@ tasel = SquaredErrorLayer()
 trcl.setKernels(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(16, 3, 3)))
 tacl.setKernels(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(16, 3, 3)))
 
-trainingLayers = [tril, trcl, trpl, trrll1, trfl, trfcl, trrll2, trsel]
-targetLayers = [tail, tacl, tapl, tarll1, tafl, tafcl, tarll2, tasel]
+trainingLayers = [tril, trfcl, trrll1, trfcl2, trrll2, trfcl3, trrll3, trsel]
+targetLayers = [tail, tafcl, tarll1, tafcl2, tarll2, tafcl3, tarll3, tasel]
 
 #Training model used for training and current q; used for action predictions
 trainingModel = Model(trainingLayers)
 
 #Target model used for future q and final model; more stable model to be updated
 targetModel = Model(targetLayers)
-
-'''DEBUG CODE --- TO DELETE
-Y = np.array([np.random.randint(8, size=4), np.random.randint(8, size=4)])
-convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights = trainingModel.getWeights()
-targetModel.setWeights(convLayerTrainingModelWeights, numKernelsPerObs, fcLayerTrainingModelWeights)
-trainingModel.train(X, Y)'''
-
-#Make a prediction
-prediction = trainingModel.predict(X)
-#trainingModel.train(X,Y)
-maxValIdx = np.argmax(prediction)
-
-#Set action with predicted action
-predictedAction = ActionTuple(np.zeros((1,0)), np.array([[maxValIdx]]))
 
 #Create channel to specify run speed
 channel = EngineConfigurationChannel()
@@ -284,9 +290,6 @@ spec = env.behavior_specs[behaviorName]
 
 #spec.action_spec is a ActionSpec tuple containing info on type of agent action and other action info
 agentActionSpec = spec.action_spec
-
-#Set action to predicted action
-env.set_actions(behaviorName, predictedAction)
 
 env.reset()
 
@@ -347,7 +350,10 @@ for episode in range(NUM_TRAINING_EPISODES):
             action = agentActionSpec.random_action(NUM_AGENTS)
         else:
             #Get predicted action
-            prediction = trainingModel.predict(observation)
+            if FIRST_LAYER_FULLY_CONNECTED:
+                prediction = trainingModel.predict(np.reshape(observation[0], NUM_MAP_ROWS * NUM_MAP_COLS))
+            else:
+                prediction = trainingModel.predict(observation)
             maxValIdx = np.argmax(prediction)
             action = ActionTuple(np.zeros((1,0)), np.array([[maxValIdx]]))
         
@@ -420,6 +426,13 @@ for episode in range(NUM_TRAINING_EPISODES):
             break        
         avgQBatch[idx] = memory[0]
     
+    #If we're using a IL->FCL architecture, reshape batch
+    if FIRST_LAYER_FULLY_CONNECTED:
+        reshapedBatch = np.zeros((REPLAY_MEMORY_BATCH_SIZE, NUM_MAP_ROWS * NUM_MAP_COLS))
+        for obsIdx, obs in enumerate(reshapedBatch):
+            reshapedBatch[obsIdx] = np.reshape(avgQBatch[obsIdx], NUM_MAP_ROWS * NUM_MAP_COLS)
+        avgQBatch = reshapedBatch
+
     #Predict and save average Q
     qVals = trainingModel.predict(avgQBatch)
     qVals = np.max(qVals, axis=1)
