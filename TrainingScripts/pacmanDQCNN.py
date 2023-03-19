@@ -247,11 +247,9 @@ targetLayers = [tail, tacl, tapl, tarll1, tafl, tafcl, tarll2, tasel]
 
 #Training model used for training and current q; used for action predictions
 trainingModel = Model(trainingLayers)
-trainingModel.load("2023-03-18-12-54-51_FC_1_CONV_1/2023-03-18-15-44-20_FC_1_CONV_1.npy")
 
 #Target model used for future q and final model; more stable model to be updated
 targetModel = Model(targetLayers)
-targetModel.load("2023-03-18-12-54-51_FC_1_CONV_1/2023-03-18-15-44-20_FC_1_CONV_1.npy")
 
 '''DEBUG CODE --- TO DELETE
 Y = np.array([np.random.randint(8, size=4), np.random.randint(8, size=4)])
