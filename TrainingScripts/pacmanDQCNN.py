@@ -38,6 +38,12 @@ USE_CUSTOM_FILE_PATH = False
 #Whether we should normalize rewards
 NORMALIZE_REWARDS = True
 
+#Should we use a living reward
+USE_LIVING_REWARD = False
+
+#Living Reward
+LIVING_REWARD = -1
+
 #Constant board size params
 NUM_MAP_ROWS = 12
 NUM_MAP_COLS = 14
@@ -59,18 +65,20 @@ NUM_TRAINING_EPISODES = 100
 NUM_TESTING_EPISODES = 100
 #Max number of stored replay memories
 MAX_REPLAYMEMORY_SIZE = 1000
-#Replay memory to delete when maxed
-NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX = 250
+#Amount of Replay Memory to Delete When Clearing
+AMT_REPLAY_MEM_TO_CLEAR_ON_CLEAR = 250
 #Replay memory batch size for training
-REPLAY_MEMORY_BATCH_SIZE = 100
+REPLAY_MEMORY_BATCH_SIZE = 250
 #Minimum number of replays to train
 MIN_REPLAY_SIZE = 500
-#Update target model every x steps
-NUM_STEPS_TILL_END_EPISODE = 250
+#Number of steps till training training model
+NUM_STEPS_TILL_TRAIN = 1250
+#End episode after this many steps
+NUM_STEPS_TILL_END_EPISODE = 2500
 #Number of episodes until we train our target model
 NUM_EPISODES_TILL_TRAIN_TARGET = 2
 
-assert NUM_STEPS_TILL_END_EPISODE <= NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX, "Make sure you are setting num steps till training to be <= than replay batch size to delete"
+#assert NUM_STEPS_TILL_END_EPISODE <= NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX, "Make sure you are setting num steps till training to be <= than replay batch size to delete"
 assert REPLAY_MEMORY_BATCH_SIZE <= MIN_REPLAY_SIZE, "Min Replay Size must be at least as big as replay batch size"
 
 #replayMemory = deque(maxlen=MAX_REPLAYMEMORY_SIZE)
@@ -135,13 +143,14 @@ def train(inReplayMemory, inTrainingModel, inTargetModel, inNumAddedReplayMems, 
     # fit the training model
     inTrainingModel.train(X, Y)
 
-    # update replay memory index
-    if (numAddedReplayMems >= MAX_REPLAYMEMORY_SIZE):
-        inReplayMemory[numAddedReplayMems-NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX:numAddedReplayMems] = None
-            
-        numAddedReplayMems -= NUM_REPLAY_MEMORY_TO_DELETE_AT_MAX
     return numAddedReplayMems
 
+def clearFirstXReplayMemories(inNumAddedReplayMems):
+    remainingReplayMemSize = inNumAddedReplayMems - AMT_REPLAY_MEM_TO_CLEAR_ON_CLEAR
+    replayMemory[:remainingReplayMemSize] = replayMemory[AMT_REPLAY_MEM_TO_CLEAR_ON_CLEAR:inNumAddedReplayMems]
+    replayMemory[remainingReplayMemSize:inNumAddedReplayMems] = None
+    inNumAddedReplayMems -= AMT_REPLAY_MEM_TO_CLEAR_ON_CLEAR 
+    return inNumAddedReplayMems
 
 def plot_metrics(log_root, log_file, model):
     log_df = pd.read_csv(f'{log_root}/{log_file}')
@@ -238,10 +247,11 @@ targetLayers = [tail, tacl, tapl, tarll1, tafl, tafcl, tarll2, tasel]
 
 #Training model used for training and current q; used for action predictions
 trainingModel = Model(trainingLayers)
-
+trainingModel.load("2023-03-18-12-54-51_FC_1_CONV_1/2023-03-18-15-44-20_FC_1_CONV_1.npy")
 
 #Target model used for future q and final model; more stable model to be updated
 targetModel = Model(targetLayers)
+targetModel.load("2023-03-18-12-54-51_FC_1_CONV_1/2023-03-18-15-44-20_FC_1_CONV_1.npy")
 
 '''DEBUG CODE --- TO DELETE
 Y = np.array([np.random.randint(8, size=4), np.random.randint(8, size=4)])
@@ -353,12 +363,16 @@ for episode in range(NUM_TRAINING_EPISODES):
             lastStepReward = decisionSteps[trackedAgent].reward
             if lastStepReward != 0 and NORMALIZE_REWARDS:
                 lastStepReward = 1 if lastStepReward >= 1 else -1
+            elif USE_LIVING_REWARD:
+                lastStepReward = LIVING_REWARD
             episodeRewards += lastStepReward
 
         if trackedAgent in terminalSteps:
             lastStepReward = terminalSteps[trackedAgent].reward
             if lastStepReward != 0 and NORMALIZE_REWARDS:
                 lastStepReward = 1 if lastStepReward >= 1 else -1
+            elif USE_LIVING_REWARD:
+                lastStepReward = LIVING_REWARD
             episodeRewards += lastStepReward
             done = True
 
@@ -378,14 +392,19 @@ for episode in range(NUM_TRAINING_EPISODES):
         observation = newObservation
 
         #Update Training Model using Bellman Equation
-        if stepsToUpdateTargetModel % NUM_STEPS_TILL_END_EPISODE == 0 or toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE or done:
+        if stepsToUpdateTargetModel % NUM_STEPS_TILL_TRAIN == 0 or done:
             numAddedReplayMems = train(replayMemory, trainingModel, targetModel, numAddedReplayMems, done)
             if numAddedReplayMems < toAddReplayMemIdx:
                 toAddReplayMemIdx = numAddedReplayMems
 
-        #Update target model weights every X steps
+        #End episode every X steps
         if stepsToUpdateTargetModel >= NUM_STEPS_TILL_END_EPISODE:
             break
+
+        if toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE:
+            numAddedReplayMems = clearFirstXReplayMemories(numAddedReplayMems)
+            if numAddedReplayMems < toAddReplayMemIdx:
+                toAddReplayMemIdx = numAddedReplayMems
 
     # Update the weights of the target model w/ the weights of the training model ever X episodes
     if (episode + 1) % NUM_EPISODES_TILL_TRAIN_TARGET == 0:
@@ -407,7 +426,13 @@ for episode in range(NUM_TRAINING_EPISODES):
     qVals = trainingModel.predict(avgQBatch)
     qVals = np.max(qVals, axis=1)
     qValsMean = np.mean(qVals, axis=0)
-    qValsMean = np.sum(qValsMean) / qValsMean.size   
+    qValsMean = np.sum(qValsMean) / qValsMean.size
+
+    #Clear some replay memory if full for next run
+    if toAddReplayMemIdx == MAX_REPLAYMEMORY_SIZE:
+        numAddedReplayMems = clearFirstXReplayMemories(numAddedReplayMems)
+        if numAddedReplayMems < toAddReplayMemIdx:
+            toAddReplayMemIdx = numAddedReplayMems   
     
     #Log Results
     resultsLogFile = open(f'{logRoot}/{logFileName}', 'a')
