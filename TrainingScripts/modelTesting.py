@@ -31,7 +31,7 @@ NUM_MAP_ROWS = 12
 NUM_MAP_COLS = 14
 
 #Weights To Load Filename
-toLoad =  "2023-03-18-18-18-17_FC_1_CONV_1/2023-03-18-18-56-55_FC_1_CONV_1.npy"
+toLoad =  "2023-03-17-20-50-31_FC_1_CONV_1/2023-03-17-21-31-08_FC_1_CONV_1.npy"
 
 X = np.array([np.random.randint(8, size=168).reshape((12,14)), np.random.randint(8, size=168).reshape((12,14))])
 
