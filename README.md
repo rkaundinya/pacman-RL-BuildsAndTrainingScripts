@@ -29,3 +29,11 @@
 27. In the 'TrainingScripts' directory locate the file 'pacmanDQCNN.py'
 28. Open 'pacmanDQCNN.py' and run this file to begin training
 
+After running pacmanDQCNN.py is complete, loss vs episode, loss vs epsilon, meanQ vs episode, reward vs episode and epsilon vs episode graphs will be stored in TrainingScripts/Logs in a folder with the run time and date of the training. 
+
+PacmanDQCNN.py is currently setup to run our MLP model as it can be run in a reasonable amount of time for demonstration/grading purposes. 
+The environment can also run the CNN architecture that is discussed in our slides and paper by:
+    1. Changing FIRST_LAYER_FULLY_CONNECTED variable to False
+    2. Changing the trainingLayers and targetLayers lists to the CNN architecture discussed in the slides/paper
+    (Runtimes for CNN training can take hours)
+
