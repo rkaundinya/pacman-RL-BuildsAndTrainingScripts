@@ -248,6 +248,10 @@ talsl = LogisticSigmoidLayer()
 sal = SoftmaxActivationLayer()
 cel = CrossEntropyLayer()
 
+#CNN FC Layers
+cnntrfcl = FullyConnectedLayer(320,4, AdamWeightUpdateCalc())
+cnntafcl = FullyConnectedLayer(320,4, AdamWeightUpdateCalc())
+
 #Alternate activation and objective funcs (DeepMind paper used)
 trrll1 = ReLuLayer()
 tarll1 = ReLuLayer()
@@ -262,6 +266,11 @@ tasel = SquaredErrorLayer()
 trcl.setKernels(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(16, 3, 3)))
 tacl.setKernels(np.random.uniform(low=-pow(10,-4), high=pow(10,-4), size=(16, 3, 3)))
 
+#Layers for CNN
+#trainingLayers = [tril, trcl, trpl, trrll1, trfl, cnntrfcl, trrll2, trsel]
+#targetLayers = [tail, tacl, tapl, tarll1, tafl, cnntafcl, tarll2, tasel]
+
+#Layers For MLP
 trainingLayers = [tril, trfcl, trrll1, trfcl2, trrll2, trfcl3, trrll3, trsel]
 targetLayers = [tail, tafcl, tarll1, tafcl2, tarll2, tafcl3, tarll3, tasel]
 
