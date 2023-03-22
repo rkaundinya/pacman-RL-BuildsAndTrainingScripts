@@ -212,7 +212,7 @@ def plot_metrics(log_root, log_file, model):
     plt.title('Rewards vs. Epsilon')
     plt.xlabel('Epsilon')
     plt.ylabel(f'Rewards')
-    plt.savefig(f'{log_root}/loss_vs_epsilon.png')
+    plt.savefig(f'{log_root}/rewards_vs_epsilon.png')
 
     # plot epsilon vs. episode
     plt.figure(4)
