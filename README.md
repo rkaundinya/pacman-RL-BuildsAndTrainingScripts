@@ -24,10 +24,11 @@
 22. Enter 'pip install numpy'
 23. Enter 'pip install pandas'
 24. Enter 'pip install datetime'
-25. Now that all packages are installed, navigate to the location of pacman-RL-BuildsAndTrainingScripts from step 1
-26. Open pacman-RL-BuildsAndTrainingScripts in an IDE of your choice (All of our testing was done in Visual Studio Code)
-27. In the 'TrainingScripts' directory locate the file 'pacmanDQCNN.py'
-28. Open 'pacmanDQCNN.py' and run this file to begin training
+25. Enter 'pip install protobuf==3.19.4'
+26. Now that all packages are installed, navigate to the location of pacman-RL-BuildsAndTrainingScripts from step 1
+27. Open pacman-RL-BuildsAndTrainingScripts in an IDE of your choice (All of our testing was done in Visual Studio Code)
+28. In the 'TrainingScripts' directory locate the file 'pacmanDQCNN.py'
+29. Open 'pacmanDQCNN.py' and run this file to begin training
 
 After running pacmanDQCNN.py is complete, loss vs episode, loss vs epsilon, meanQ vs episode, reward vs episode and epsilon vs episode graphs will be stored in TrainingScripts/Logs in a folder with the run time and date of the training. 
 

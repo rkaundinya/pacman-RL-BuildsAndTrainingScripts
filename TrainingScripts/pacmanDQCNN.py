@@ -36,7 +36,7 @@ import pandas as pd
 USE_CUSTOM_FILE_PATH = False
 
 #Whether we should normalize rewards
-NORMALIZE_REWARDS = False
+NORMALIZE_REWARDS = True
 
 #Should we use a living reward
 USE_LIVING_REWARD = False
@@ -61,8 +61,8 @@ EPSILON = 1
 #Amount to scale epsilon decay by after every episode
 DECAY = 0.01
 #Number of training episodes
-NUM_TRAINING_EPISODES = 300
-NUM_TESTING_EPISODES = 100
+NUM_TRAINING_EPISODES = 100
+NUM_TESTING_EPISODES = 33
 #Max number of stored replay memories
 MAX_REPLAYMEMORY_SIZE = 1000
 #Amount of Replay Memory to Delete When Clearing
