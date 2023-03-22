@@ -42,8 +42,10 @@ The environment can also run the CNN architecture that is discussed in our slide
     3. Un-comment the training/target layers list on lines 270-271
     (Runtimes for CNN training can take hours)
 
+All neural network layers used in this project are located in TrainingScripts/NeurelNetworkPackage.
+
 A trained model can then be tested in the 'modelTesting.py' file.
-Weights are periodically stored as .npy files and can be loaded into modelTesting.py by editing the path of the toLoad variable
+Weights are periodically stored as .npy files and can be loaded into modelTesting.py by editing the path of the toLoad variable on line 34
 The testModelLayers list must also accurately reflect the same architecture that the weights were trained on.
 Weight .npy files are stored in TrainingScripts/NPY_Files
 
